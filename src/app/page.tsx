@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { PacienteControl } from '@/types';
 import { AlertCircle, CheckCircle, Clock, Calendar as CalendarIcon } from 'lucide-react';
 import CalendarioAgendamiento from '@/components/CalendarioAgendamiento';
+import VistaDiaria from '@/components/VistaDiaria';
 
 // Directivas críticas para que los datos se actualicen en tiempo real
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,7 @@ export default async function Dashboard() {
             <CalendarIcon size={24} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Gestor Centro Terapias</h1>
+            <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Gestor Centro Terapias</h1>
             <p className="text-sm text-gray-500 mt-1 italic">
               Sistema inteligente de tokens y agendamiento flexible
             </p>
@@ -49,7 +50,7 @@ export default async function Dashboard() {
           </span>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -60,10 +61,10 @@ export default async function Dashboard() {
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Próximo Corte de Ciclo</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+              <tbody className="bg-slate-800 divide-y divide-gray-100">
                 {pacientes?.map((p: PacienteControl) => (
                   <tr key={p.paciente_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-100">
                       {p.nombre_completo}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -109,14 +110,20 @@ export default async function Dashboard() {
       {/* SECCIÓN 3: CALENDARIO OPERATIVO */}
       <section className="mt-12">
         <div className="mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Agenda Semanal</h2>
+          <h2 className="text-2xl font-bold text-slate-100">Agenda Semanal</h2>
           <p className="text-sm text-gray-500">Visualiza cupos libres y gestiona las sesiones de los terapeutas.</p>
         </div>
         
         <CalendarioAgendamiento />
+
+        <div>
+    <h2 className="text-2xl font-black text-orange-400 uppercase tracking-tighter">Vista Diaria de Equipo</h2>
+    <VistaDiaria />
+  </div>
+
       </section>
 
-      <footer className="mt-16 py-8 border-t border-gray-200 text-center text-gray-400 text-xs">
+      <footer className="mt-16 py-8 border-t border-slate-700 text-center text-gray-400 text-xs">
         &copy; {new Date().getFullYear()} Centro Terapias Comunícame - Gestión Inteligente
       </footer>
     </main>
