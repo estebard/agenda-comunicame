@@ -1,21 +1,11 @@
 @import "tailwindcss";
 
+/* =========================================
+   1. TEMA OSCURO (Por Defecto)
+========================================= */
 :root {
-  /* Paleta de colores Dark Mode por defecto para evitar "blanco sobre blanco" */
   --background: #020617; /* Slate 950 */
   --foreground: #f8fafc; /* Slate 50 */
-  
-  --card: #0f172a;       /* Slate 900 */
-  --card-border: #1e293b; /* Slate 800 */
-  --accent-blue: #3b82f6; /* Blue 500 */
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-border: var(--card-border);
-  --color-accent-blue: var(--accent-blue);
 }
 
 body {
@@ -23,50 +13,148 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
-/* Estilos de Contraste para Elementos de Formulario */
-/* Esto asegura que los textos de los Selects y Modales sean visibles */
-select, input, option {
-  background-color: #1e293b !important; /* Fondo gris oscuro */
-  color: #ffffff !important;           /* Texto blanco puro */
+/* Forzar estilos oscuros a los inputs SOLO si no estamos en tema pastel */
+:root:not([data-theme="pastel"]) select, 
+:root:not([data-theme="pastel"]) input, 
+:root:not([data-theme="pastel"]) textarea,
+:root:not([data-theme="pastel"]) option {
+  background-color: #1e293b !important; 
+  color: #ffffff !important;           
   border: 1px solid #334155 !important;
 }
 
-select:focus, input:focus {
-  outline: 2px solid var(--accent-blue);
-  border-color: var(--accent-blue) !important;
+:root:not([data-theme="pastel"]) select:focus, 
+:root:not([data-theme="pastel"]) input:focus {
+  outline: 2px solid #3b82f6;
+  border-color: #3b82f6 !important;
 }
 
-/* Mejoras para las tablas en modo oscuro */
-table {
-  border-color: #334155 !important;
+
+/* =========================================
+   2. TEMA PASTEL (Neuroinclusivo)
+========================================= */
+[data-theme="pastel"] {
+  /* Fondos cálidos y amigables (Bajo contraste) */
+  --background: #F4F1EA; /* Arena muy suave */
+  --foreground: #3D3A37; /* Gris carbón suave (nunca negro puro) */
+
+  /* Invertimos la escala de grises de Tailwind (Slate) a tonos crema */
+  --color-slate-950: #F4F1EA; /* Fondo de la app */
+  --color-slate-900: #f8eaca; /* Fondo de tarjetas */
+  --color-slate-800: #978464; /* Bordes suaves */
+  --color-slate-700: #D8D3CB; /* Bordes hover */
+  --color-slate-600: #9C958D; /* Iconos */
+  --color-slate-500: #7A746D; /* Textos secundarios */
+  --color-slate-400: #5C5852; /* Textos base */
+  --color-slate-200: #3D3A37; /* Títulos */
+  --color-slate-100: #292725; /* Títulos fuertes */
+
+  /* Azul (Botones y tarjetas Confirmadas) */
+  --color-blue-900: #D8E4E1; /* Fondo suave */
+  --color-blue-800: #B2CBC6;
+  --color-blue-600: #3E635A;
+  --color-blue-500: #2C4A43;
+  --color-blue-400: #1A3831;
+  --color-blue-100: #122621; /* <-- TEXTO ULTRA OSCURO */
+
+  /* Verde (Asistencia) */
+  --color-emerald-900: #D1E7DD; /* Fondo suave */
+  --color-emerald-500: #2A5A43;
+  --color-emerald-400: #184230;
+  --color-emerald-100: #0C2118; /* <-- TEXTO ULTRA OSCURO */
+
+  /* Rojo (Inasistencia) */
+  --color-red-900: #F8D7DA; /* Fondo suave */
+  --color-red-500: #9E362B;
+  --color-red-400: #6B2118;
+  --color-red-100: #471510; /* <-- TEXTO ULTRA OSCURO */
+
+  /* Naranja/Ambar (Agendada / Colación) */
+  --color-amber-900: #FFF3CD;
+  --color-amber-500: #997404;
+  --color-amber-400: #664D03;
+  --color-amber-100: #332601; /* <-- TEXTO ULTRA OSCURO */
+
+  --color-orange-900: #FFEFE6;
+  --color-orange-500: #A85324;
+  --color-orange-400: #7A3512;
+  --color-orange-100: #421C09; /* <-- TEXTO ULTRA OSCURO */
 }
 
-th {
-  background-color: #0f172a !important; /* Slate 900 */
-  color: #94a3b8 !important;           /* Slate 400 para cabeceras */
+/* Estilos de inputs para el tema pastel */
+[data-theme="pastel"] select, 
+[data-theme="pastel"] input, 
+[data-theme="pastel"] textarea,
+[data-theme="pastel"] option {
+  background-color: #FFFFFF !important;
+  color: #3D3A37 !important;
+  border: 1px solid #EAE6DF !important;
+  border-radius: 0.75rem;
 }
 
-td {
-  border-color: #1e293b !important;
+[data-theme="pastel"] select:focus, 
+[data-theme="pastel"] input:focus,
+[data-theme="pastel"] textarea:focus {
+  outline: 2px solid #84A59D;
+  border-color: #84A59D !important;
 }
 
-/* Scrollbars para estilo oscuro */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Scrollbars más limpios */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-slate-700); border-radius: 10px; }
+
+/* Estilos Globales para React Big Calendar */
+.custom-calendar .rbc-calendar {
+  color: var(--foreground) !important;
 }
 
-::-webkit-scrollbar-track {
-  background: #020617;
+.custom-calendar .rbc-off-range-bg {
+  background: var(--color-slate-950) !important;
+  opacity: 0.5;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 10px;
+.custom-calendar .rbc-today {
+  background: var(--color-blue-900) !important;
+  opacity: 0.3;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.custom-calendar .rbc-header {
+  border-bottom: 1px solid var(--color-slate-800) !important;
+  padding: 10px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  font-size: 11px !important;
+}
+
+.custom-calendar .rbc-month-view, 
+.custom-calendar .rbc-time-view,
+.custom-calendar .rbc-month-row,
+.custom-calendar .rbc-day-bg {
+  border-color: var(--color-slate-800) !important;
+}
+
+.custom-calendar .rbc-toolbar button {
+  color: var(--foreground) !important;
+  border: 1px solid var(--color-slate-700) !important;
+  background: var(--color-slate-900) !important;
+  border-radius: 8px !important;
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  font-size: 10px !important;
+}
+
+.custom-calendar .rbc-toolbar button:active, 
+.custom-calendar .rbc-toolbar button.rbc-active {
+  background: var(--color-blue-600) !important;
+  color: white !important;
+  box-shadow: none !important;
+}
+
+/* Ajustes para el Modo Calma */
+[data-theme="pastel"] .custom-calendar .rbc-event {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }

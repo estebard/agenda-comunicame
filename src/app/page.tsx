@@ -1,131 +1,146 @@
 import { supabase } from '@/lib/supabaseClient';
-import { PacienteControl } from '@/types';
-import { AlertCircle, CheckCircle, Clock, Calendar as CalendarIcon } from 'lucide-react';
-import CalendarioAgendamiento from '@/components/CalendarioAgendamiento';
-import VistaDiaria from '@/components/VistaDiaria';
+import { 
+  Users, 
+  CalendarClock, 
+  TrendingUp, 
+  AlertOctagon,
+  CheckCircle2,
+  XCircle,
+  Clock
+} from 'lucide-react';
+import { format, startOfDay, endOfDay } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-// Directivas críticas para que los datos se actualicen en tiempo real
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-export default async function Dashboard() {
-  // 1. Obtenemos los datos de la vista algorítmica de tokens
-  const { data: pacientes, error } = await supabase
+export default async function DashboardGeneral() {
+  // 1. Definir rango de "Hoy"
+  const hoy = new Date();
+  // Para pruebas con tus datos inyectados, forzamos el 30 de Abril si lo deseas, 
+  // pero usaremos la fecha real del sistema para producción:
+  const inicioHoy = startOfDay(hoy).toISOString();
+  const finHoy = endOfDay(hoy).toISOString();
+
+  // 2. Traer citas de hoy
+  const { data: citasHoy } = await supabase
+    .from('cita')
+    .select('*, profesional(nombre, especialidad)')
+    .gte('fecha_hora_inicio', inicioHoy)
+    .lte('fecha_hora_inicio', finHoy);
+
+  // 3. Traer pacientes con tokens críticos (Saldo <= 2)
+  const { data: pacientesCriticos } = await supabase
     .from('vw_control_panel_agendamiento')
     .select('*')
-    .order('saldo_tokens', { ascending: false });
+    .lte('saldo_tokens', 2)
+    .order('saldo_tokens', { ascending: true })
+    .limit(5);
 
-  if (error) {
-    return (
-      <div className="p-8 text-red-500 bg-red-50 border border-red-200 rounded-lg">
-        <h2 className="font-bold text-lg">Error de conexión con la base de datos</h2>
-        <p className="text-sm">{error.message}</p>
-      </div>
-    );
-  }
+  // Cálculos Rápidos
+  const totalCitas = citasHoy?.length || 0;
+  const asistencias = citasHoy?.filter(c => c.estado === 'ASISTE').length || 0;
+  const inasistencias = citasHoy?.filter(c => c.estado === 'NO_ASISTE' || c.estado === 'CANCELADA').length || 0;
+  const porAtender = citasHoy?.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length || 0;
+
+  // Agrupar por profesional
+  const cargaPorProfesional = citasHoy?.reduce((acc: any, cita) => {
+    const prof = cita.profesional?.nombre || 'Desconocido';
+    if (!acc[prof]) acc[prof] = 0;
+    acc[prof]++;
+    return acc;
+  }, {});
 
   return (
-    <main className="p-4 md:p-8 bg-gray-50 min-h-screen">
-      {/* SECCIÓN 1: CABECERA */}
-      <header className="mb-8">
-        <div className="flex items-center space-x-3">
-          <div className="bg-blue-600 p-2 rounded-lg text-white">
-            <CalendarIcon size={24} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Gestor Centro Terapias</h1>
-            <p className="text-sm text-gray-500 mt-1 italic">
-              Sistema inteligente de tokens y agendamiento flexible
-            </p>
-          </div>
-        </div>
+    <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+      <header>
+        <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter">
+          Dashboard Ejecutivo
+        </h1>
+        <p className="text-sm font-bold text-slate-400 capitalize mt-1">
+          {format(hoy, "EEEE dd 'de' MMMM, yyyy", { locale: es })}
+        </p>
       </header>
 
-      {/* SECCIÓN 2: PANEL DE CONTROL DE TOKENS (SALDOS) */}
-      <section className="mb-12">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Estado de Sesiones Mensuales</h2>
-          <span className="text-xs font-semibold bg-gray-200 text-gray-600 px-2 py-1 rounded">
-            TOTAL PACIENTES: {pacientes?.length || 0}
-          </span>
+      {/* METRICAS PRINCIPALES (Tarjetas) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><CalendarClock size={64} /></div>
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Total Sesiones Hoy</span>
+          <span className="text-5xl font-black text-blue-400">{totalCitas}</span>
         </div>
 
-        <div className="bg-slate-800 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Paciente</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Prioridad / Estado</th>
-                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Tokens (Sesiones)</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Próximo Corte de Ciclo</th>
-                </tr>
-              </thead>
-              <tbody className="bg-slate-800 divide-y divide-gray-100">
-                {pacientes?.map((p: PacienteControl) => (
-                  <tr key={p.paciente_id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-100">
-                      {p.nombre_completo}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {p.estado_operativo === 'AL_DIA' && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                          <CheckCircle className="w-3 h-3 mr-1.5" /> Al día
-                        </span>
-                      )}
-                      {p.estado_operativo === 'REQUIERE_AGENDAMIENTO' && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                          <AlertCircle className="w-3 h-3 mr-1.5" /> Pendiente agendar
-                        </span>
-                      )}
-                      {p.estado_operativo === 'SESIONES_ADELANTADAS' && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                          <Clock className="w-3 h-3 mr-1.5" /> Adelantando sesiones
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className={`text-sm font-bold px-3 py-1 rounded-lg ${
-                        p.saldo_tokens > 0 ? 'bg-amber-50 text-amber-700' : 
-                        p.saldo_tokens < 0 ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-500'
-                      }`}>
-                        {p.saldo_tokens > 0 ? `+${p.saldo_tokens}` : p.saldo_tokens}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(p.proxima_fecha_corte).toLocaleDateString('es-ES', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="bg-emerald-900/20 border border-emerald-900/50 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><CheckCircle2 size={64} /></div>
+          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Asistencias</span>
+          <span className="text-5xl font-black text-emerald-500">{asistencias}</span>
         </div>
-      </section>
 
-      {/* SECCIÓN 3: CALENDARIO OPERATIVO */}
-      <section className="mt-12">
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold text-slate-100">Agenda Semanal</h2>
-          <p className="text-sm text-gray-500">Visualiza cupos libres y gestiona las sesiones de los terapeutas.</p>
+        <div className="bg-amber-900/20 border border-amber-900/50 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Clock size={64} /></div>
+          <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">Por Atender</span>
+          <span className="text-5xl font-black text-amber-500">{porAtender}</span>
         </div>
+
+        <div className="bg-red-900/20 border border-red-900/50 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><XCircle size={64} /></div>
+          <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Ausencias / Canceladas</span>
+          <span className="text-5xl font-black text-red-500">{inasistencias}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <CalendarioAgendamiento />
+        {/* CARGA POR PROFESIONAL */}
+        <section className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+          <div className="p-5 border-b border-slate-800 bg-slate-950">
+            <h2 className="font-black text-slate-200 uppercase tracking-widest text-sm flex items-center">
+              <TrendingUp className="mr-2 text-blue-400" size={18} /> Carga Operativa por Especialista (Hoy)
+            </h2>
+          </div>
+          <div className="p-6 flex gap-4 overflow-x-auto">
+            {Object.keys(cargaPorProfesional || {}).length === 0 ? (
+               <p className="text-slate-500 text-sm font-bold w-full text-center py-8">No hay citas registradas para hoy.</p>
+            ) : (
+              Object.entries(cargaPorProfesional).map(([profesional, cantidad]) => (
+                <div key={profesional} className="flex-1 bg-slate-950 border border-slate-800 p-6 rounded-2xl text-center min-w-[150px]">
+                  <div className="text-4xl font-black text-slate-100 mb-2">{String(cantidad)}</div>
+                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{profesional}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
-        <div>
-    <h2 className="text-2xl font-black text-orange-400 uppercase tracking-tighter">Vista Diaria de Equipo</h2>
-    <VistaDiaria />
-  </div>
+        {/* ALERTAS DE TOKENS (Saldos) */}
+        <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+          <div className="p-5 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
+            <h2 className="font-black text-slate-200 uppercase tracking-widest text-sm flex items-center">
+              <AlertOctagon className="mr-2 text-red-400" size={18} /> Alertas de Tokens
+            </h2>
+          </div>
+          <div className="divide-y divide-slate-800">
+            {pacientesCriticos?.length === 0 ? (
+               <p className="text-slate-500 text-sm font-bold text-center py-10">Todos los pacientes tienen saldo suficiente.</p>
+            ) : (
+              pacientesCriticos?.map((p: any) => (
+                <div key={p.paciente_id} className="p-4 flex justify-between items-center hover:bg-slate-800/50 transition-colors">
+                  <div>
+                    <div className="text-sm font-black text-slate-200">{p.nombre_completo}</div>
+                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Corte: {new Date(p.proxima_fecha_corte).toLocaleDateString()}</div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${
+                    p.saldo_tokens < 0 ? 'bg-red-900/30 text-red-500 border border-red-900/50' : 'bg-amber-900/30 text-amber-500 border border-amber-900/50'
+                  }`}>
+                    {p.saldo_tokens} Tokens
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
-      </section>
-
-      <footer className="mt-16 py-8 border-t border-slate-700 text-center text-gray-400 text-xs">
-        &copy; {new Date().getFullYear()} Centro Terapias Comunícame - Gestión Inteligente
-      </footer>
+      </div>
     </main>
   );
 }
