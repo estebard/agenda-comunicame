@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw } from 'lucide-react';
 import ModalGestionarBloque from './ModalGestionarBloque';
 
 const HORARIOS = ['09:05', '10:00', '11:00', '12:00', '13:00', '14:00', '14:50', '15:40', '16:30', '17:20'];
@@ -51,7 +51,7 @@ export default function VistaDiaria() {
       .from('asistencia')
       .select(`
         id, fecha_hora_ejecucion, estado, observacion, profesional_id,
-        cita:cita_oficial_id (id, fecha_hora_inicio, paciente:paciente_id(id, nombre_completo, fecha_nacimiento, tokens_disponibles))
+        cita:cita_oficial_id (id, fecha_hora_inicio, es_recuperacion, paciente:paciente_id(id, nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles))
       `)
       .gte('fecha_hora_ejecucion', inicioStr)
       .lte('fecha_hora_ejecucion', finStr);
@@ -61,7 +61,7 @@ export default function VistaDiaria() {
     // 2. Obtener Planificación Oficial (Proyecciones de lectura)
     const { data: citas, error: errCitas } = await supabase
       .from('cita')
-      .select('id, fecha_hora_inicio, estado, observacion, profesional_id, paciente:paciente_id(id, nombre_completo, fecha_nacimiento, tokens_disponibles)').gte('fecha_hora_inicio', inicioStr)
+      .select('id, fecha_hora_inicio, estado, observacion, es_recuperacion, profesional_id, paciente:paciente_id(id, nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles)').gte('fecha_hora_inicio', inicioStr)
       .lte('fecha_hora_inicio', finStr);
 
     if (errCitas) console.error("Error DQL Citas:", errCitas);
@@ -76,6 +76,7 @@ export default function VistaDiaria() {
       profesionalId: a.profesional_id,
       horaRender: format(new Date(a.fecha_hora_ejecucion), 'HH:mm'),
       fechaOficial: a.cita?.fecha_hora_inicio,
+      esRecuperacion: a.cita?.es_recuperacion || false,
       paciente: a.cita?.paciente,
       estado: a.estado,
       observacion: a.observacion
@@ -90,6 +91,7 @@ export default function VistaDiaria() {
         profesionalId: c.profesional_id,
         horaRender: format(new Date(c.fecha_hora_inicio), 'HH:mm'),
         fechaOficial: c.fecha_hora_inicio,
+        esRecuperacion: c.es_recuperacion || false,
         paciente: c.paciente,
         estado: c.estado || 'AGENDADA',
         observacion: c.observacion
@@ -193,15 +195,19 @@ export default function VistaDiaria() {
                                   </span>
                                 </div>
 
-                                {/* Renderizado Visual de Tokens */}
                                 <div className="flex gap-1 flex-wrap mb-1.5">
                                   {b.fechaOficial && (
                                     <div className="bg-amber-950/40 text-amber-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-amber-500/30 inline-block">
-                                      Of: {format(new Date(b.fechaOficial), 'HH:mm')} hrs
+                                      Agenda: {format(new Date(b.fechaOficial), "dd MMM HH:mm", { locale: es })} hrs
                                     </div>
                                   )}
-                                  
-                                  {/* Distintivo de Tokenización Condicional */}
+
+                                  {b.esRecuperacion && (
+                                    <div className="bg-purple-900/40 text-purple-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-purple-500/30 inline-block flex items-center gap-0.5">
+                                      <RefreshCw size={10} /> Recuperación
+                                    </div>
+                                  )}
+
                                   <div className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border inline-block ${
                                     (b.paciente?.tokens_disponibles || 0) > 0 
                                       ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' 
@@ -212,6 +218,12 @@ export default function VistaDiaria() {
                                       : `Deuda: ${Math.abs(b.paciente?.tokens_disponibles || 0)} T`}
                                   </div>
                                 </div>
+
+                                {b.paciente?.nombre_apoderado && (
+                                  <div className="text-[9px] font-bold text-slate-400 mb-1">
+                                    Apod.: {b.paciente.nombre_apoderado}
+                                  </div>
+                                )}
 
                                 {b.observacion && (
                                   <div className="text-[9px] font-medium leading-tight opacity-90 mb-1 italic line-clamp-2">
