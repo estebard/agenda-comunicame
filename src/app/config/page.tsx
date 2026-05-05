@@ -30,6 +30,28 @@ export default function ConfigPage() {
     p.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  async function handleDeleteProf(id: string, nombre: string) {
+    if (!confirm(`¿Eliminar al profesional ${nombre}?`)) return;
+    try {
+      const { error } = await supabase.from('profesional').delete().eq('id', id);
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  }
+
+  async function handleDeletePaciente(id: string, nombre: string) {
+    if (!confirm(`¿Eliminar físicamente a ${nombre}? Es mejor usar la opción "Desactivar" en el módulo Pacientes.`)) return;
+    try {
+      const { error } = await supabase.from('paciente').delete().eq('id', id);
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  }
+
   async function handleAddProf() {
     if (!newProf.nombre) return;
     await supabase.from('profesional').insert([newProf]);
@@ -105,7 +127,7 @@ export default function ConfigPage() {
                       </span>
                     </td>
                     <td className="p-5 text-center">
-                      <button className="text-slate-600 hover:text-red-400 p-2 transition-colors">
+                      <button onClick={() => handleDeleteProf(p.id, p.nombre)} className="text-slate-600 hover:text-red-400 p-2 transition-colors">
                         <Trash2 size={18} />
                       </button>
                     </td>
@@ -151,7 +173,7 @@ export default function ConfigPage() {
                       {new Date(p.fecha_ingreso).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
                     </td>
                     <td className="p-5 text-center">
-                      <button className="text-slate-600 hover:text-red-400 p-2 transition-colors">
+                      <button onClick={() => handleDeletePaciente(p.id, p.nombre_completo)} className="text-slate-600 hover:text-red-400 p-2 transition-colors">
                         <Trash2 size={18} />
                       </button>
                     </td>

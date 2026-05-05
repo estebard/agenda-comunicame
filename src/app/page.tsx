@@ -17,19 +17,24 @@ export const fetchCache = 'force-no-store';
 export default async function DashboardGeneral() {
   // 1. Definir rango de "Hoy"
   const hoy = new Date();
-  // Para pruebas con tus datos inyectados, forzamos el 30 de Abril si lo deseas, 
-  // pero usaremos la fecha real del sistema para producción:
   const inicioHoy = startOfDay(hoy).toISOString();
   const finHoy = endOfDay(hoy).toISOString();
 
-  // 2. Traer citas de hoy
+  // 2. Traer citas de hoy (agenda oficial)
   const { data: citasHoy } = await supabase
     .from('cita')
     .select('*, profesional(nombre, especialidad)')
     .gte('fecha_hora_inicio', inicioHoy)
     .lte('fecha_hora_inicio', finHoy);
 
-  // 3. Traer pacientes con tokens críticos (Saldo <= 2)
+  // 3. Traer asistencias de hoy (ejecución real)
+  const { data: asistenciasHoy } = await supabase
+    .from('asistencia')
+    .select('id, estado, cita:cita_oficial_id(profesional:profesional_id(nombre, especialidad))')
+    .gte('fecha_hora_ejecucion', inicioHoy)
+    .lte('fecha_hora_ejecucion', finHoy);
+
+  // 4. Traer pacientes con tokens críticos (Saldo <= 2)
   const { data: pacientesCriticos } = await supabase
     .from('vw_control_panel_agendamiento')
     .select('*')
@@ -39,13 +44,13 @@ export default async function DashboardGeneral() {
 
   // Cálculos Rápidos
   const totalCitas = citasHoy?.length || 0;
-  const asistencias = citasHoy?.filter(c => c.estado === 'ASISTE').length || 0;
-  const inasistencias = citasHoy?.filter(c => c.estado === 'NO_ASISTE' || c.estado === 'CANCELADA').length || 0;
+  const asistencias = asistenciasHoy?.filter(a => a.estado === 'ASISTE').length || 0;
+  const inasistencias = asistenciasHoy?.filter(a => a.estado === 'NO_ASISTE').length || 0;
   const porAtender = citasHoy?.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length || 0;
 
-  // Agrupar por profesional
-  const cargaPorProfesional = citasHoy?.reduce((acc: any, cita) => {
-    const prof = cita.profesional?.nombre || 'Desconocido';
+  // Agrupar asistencias reales por profesional
+  const cargaPorProfesional = asistenciasHoy?.reduce((acc: any, a: any) => {
+    const prof = a.cita?.profesional?.nombre || 'Desconocido';
     if (!acc[prof]) acc[prof] = 0;
     acc[prof]++;
     return acc;

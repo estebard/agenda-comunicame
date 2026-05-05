@@ -228,12 +228,22 @@ export default function HistorialPacientesPage() {
   };
 
   const handleDeletePaciente = async (paciente: any) => {
-    if (!confirm(`¿Eliminar a ${paciente.nombre_completo}? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Desactivar a ${paciente.nombre_completo}? Quedará inactivo pero su historial se conservará.`)) return;
 
     try {
+      const { count: citasActivas } = await supabase
+        .from('cita')
+        .select('*', { count: 'exact', head: true })
+        .eq('paciente_id', paciente.paciente_id)
+        .neq('estado', 'CANCELADA');
+
+      if (citasActivas && citasActivas > 0) {
+        if (!confirm(`${paciente.nombre_completo} tiene ${citasActivas} citas activas. ¿Desactivar de todas formas?`)) return;
+      }
+
       const { error } = await supabase
         .from('paciente')
-        .delete()
+        .update({ activo: false })
         .eq('id', paciente.paciente_id);
       if (error) throw error;
 
@@ -242,7 +252,7 @@ export default function HistorialPacientesPage() {
       }
       await fetchPacientes();
     } catch (err: any) {
-      alert(`Error al eliminar: ${err.message}`);
+      alert(`Error al desactivar: ${err.message}`);
     }
   };
 

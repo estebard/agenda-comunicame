@@ -101,46 +101,70 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
   };
 
   const handleSave = async () => {
-    // Resolver el ID de la Cita Oficial dependiendo de si es una proyección automática o una búsqueda manual
     const targetCitaId = bloqueExistente ? bloqueExistente.citaOficialId : citaSeleccionadaId;
     
     if (!targetCitaId) return alert('Debe referenciar una ficha de agenda oficial.');
     setIsSaving(true);
 
     try {
-      // 1. DML sobre Entidad Transaccional (Asistencia)
+      // Obtener paciente_id de la cita (para token)
+      const { data: citaData } = await supabase
+        .from('cita')
+        .select('paciente_id')
+        .eq('id', targetCitaId)
+        .single();
+
+      let newAsistenciaId: string | null = null;
+
       if (bloqueExistente?.isEjecucion) {
         const { error: errAsistencia } = await supabase.from('asistencia').update({
           profesional_id: profesionalId,
           estado,
           observacion
         }).eq('id', bloqueExistente.asistenciaId);
-        
         if (errAsistencia) throw errAsistencia;
       } else {
-        // Transformar la proyección en un registro real de asistencia
         const inicioEjecucion = new Date(dia);
         const [h, m] = hora.split(':').map(Number);
         inicioEjecucion.setHours(h, m, 0, 0);
 
-        const { error: errAsistencia } = await supabase.from('asistencia').insert([{
+        const { data: inserted, error: errAsistencia } = await supabase.from('asistencia').insert([{
           cita_oficial_id: targetCitaId,
           profesional_id: profesionalId,
           fecha_hora_ejecucion: inicioEjecucion.toISOString(),
           estado,
           observacion
-        }]);
-        
+        }]).select('id');
+
         if (errAsistencia) throw errAsistencia;
+        newAsistenciaId = inserted?.[0]?.id || null;
       }
 
-      // 2. Propagación DML sobre Entidad Maestra (Cita Oficial)
-      // Sincroniza la observación dictada en la regla de negocio
       const { error: errCita } = await supabase.from('cita')
         .update({ observacion })
         .eq('id', targetCitaId);
-        
       if (errCita) throw new Error(`Error sincronizando cita maestra: ${errCita.message}`);
+
+      // Descontar token si asiste (solo primera vez)
+      const debeDescontar = estado === 'ASISTE' && (
+        newAsistenciaId !== null ||
+        (bloqueExistente?.isEjecucion && bloqueExistente.estado !== 'ASISTE')
+      );
+
+      if (debeDescontar && citaData?.paciente_id) {
+        const ledgerPayload: any = {
+          paciente_id: citaData.paciente_id,
+          tipo_operacion: 'CONSUMO_SESION',
+          cantidad: -1,
+          observacion: 'Consumo de 1 sesión'
+        };
+        if (newAsistenciaId) {
+          ledgerPayload.referencia_asistencia_id = newAsistenciaId;
+        } else if (bloqueExistente?.asistenciaId) {
+          ledgerPayload.referencia_asistencia_id = bloqueExistente.asistenciaId;
+        }
+        await supabase.from('paciente_token_ledger').insert([ledgerPayload]);
+      }
 
       onSuccess();
       onClose();

@@ -28,6 +28,7 @@ export default function ModalDetalleCita({ isOpen, onClose, cita, onSuccess }: M
   const [hora, setHora] = useState('');
   const [estado, setEstado] = useState('');
   const [observacion, setObservacion] = useState('');
+  const [esRecuperacion, setEsRecuperacion] = useState(false);
 
   useEffect(() => {
     if (isOpen && cita) {
@@ -38,6 +39,7 @@ export default function ModalDetalleCita({ isOpen, onClose, cita, onSuccess }: M
       setHora(format(new Date(cita.fecha_hora_inicio), 'HH:mm'));
       setEstado(cita.estado || 'AGENDADA');
       setObservacion(cita.observacion || '');
+      setEsRecuperacion(cita.es_recuperacion || false);
     }
   }, [isOpen, cita]);
 
@@ -65,6 +67,7 @@ export default function ModalDetalleCita({ isOpen, onClose, cita, onSuccess }: M
           fecha_hora_inicio: inicio.toISOString(),
           fecha_hora_fin: fin.toISOString(),
           estado,
+          es_recuperacion: esRecuperacion,
           observacion
         })
         .eq('id', cita.id);
@@ -144,6 +147,12 @@ export default function ModalDetalleCita({ isOpen, onClose, cita, onSuccess }: M
               <option value="CANCELADA">Cancelada</option>
             </select>
           </div>
+
+          <label className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-700 rounded-lg cursor-pointer hover:border-purple-500/50 transition-colors">
+            <input type="checkbox" checked={esRecuperacion} onChange={(e) => setEsRecuperacion(e.target.checked)}
+              className="w-4 h-4 accent-purple-500" />
+            <span className="text-[10px] font-black text-slate-400 uppercase">Sesión de Recuperación</span>
+          </label>
 
           <div>
             <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Observación Oficial</label>

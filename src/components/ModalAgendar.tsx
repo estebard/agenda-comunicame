@@ -34,19 +34,32 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
   if (!isOpen) return null;
 
   const handleAgendar = async () => {
-    // VALIDACIÓN CRÍTICA: Evitar UUID vacío
     if (!pacienteId || pacienteId === "" || !profesionalId) {
       alert('Por favor, seleccione un paciente de la lista.');
       return;
     }
-    
+
     setIsSaving(true);
     const [h, m] = hora.split(':').map(Number);
     const inicio = new Date(dia);
     inicio.setHours(h, m, 0, 0);
-    
+
     const fin = new Date(inicio);
     fin.setMinutes(fin.getMinutes() + 45);
+
+    // Validar duplicados en el mismo slot
+    const { data: duplicados } = await supabase
+      .from('cita')
+      .select('id, paciente:nombre_completo')
+      .eq('profesional_id', profesionalId)
+      .eq('fecha_hora_inicio', inicio.toISOString())
+      .neq('estado', 'CANCELADA');
+
+    if (duplicados && duplicados.length > 0) {
+      alert(`Ya existe una cita en este bloque horario.`);
+      setIsSaving(false);
+      return;
+    }
 
     const { error } = await supabase.from('cita').insert({
       paciente_id: pacienteId,
@@ -67,25 +80,29 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200">
-        <div className="bg-blue-600 p-4 flex justify-between items-center text-white rounded-t-xl">
-          <h3 className="font-bold text-lg uppercase tracking-tight">Nuevo Agendamiento</h3>
-          <button onClick={onClose} className="hover:bg-blue-700 rounded-full p-1"><X size={20} /></button>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <div className="bg-slate-900 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden">
+        <div className="bg-slate-950 p-4 flex justify-between items-center border-b border-slate-800">
+          <h3 className="font-black text-slate-100 uppercase tracking-widest flex items-center">
+            Nuevo Agendamiento
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="p-6 space-y-5">
-          <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-100">
-            <span className="text-xs font-black text-blue-400 uppercase">Bloque Seleccionado</span>
-            <div className="text-xl font-black text-blue-900 leading-tight">
-              {format(dia, "EEEE dd 'de' MMMM", { locale: es })} <br/> {hora} hrs
+          <div className="bg-slate-950 border border-slate-700 p-4 rounded-xl text-center">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Bloque Seleccionado</span>
+            <div className="text-lg font-black text-slate-200 mt-1">
+              {format(dia, "EEEE dd 'de' MMMM", { locale: es })} — {hora} hrs
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-black text-gray-500 uppercase mb-2">Paciente</label>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Paciente</label>
             <select 
-              className="w-full border-2 border-gray-300 rounded-lg p-3 font-bold text-gray-700 focus:border-blue-600 outline-none"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm font-bold text-slate-200 outline-none focus:border-blue-500"
               value={pacienteId}
               onChange={(e) => setPacienteId(e.target.value)}
             >
@@ -96,20 +113,16 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
             </select>
           </div>
 
-          <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border border-orange-200 cursor-pointer" onClick={() => setEsRecuperacion(!esRecuperacion)}>
-            <input 
-              type="checkbox" 
-              checked={esRecuperacion} 
-              onChange={() => {}} 
-              className="w-5 h-5 accent-orange-600"
-            />
-            <span className="text-sm font-bold text-orange-800 uppercase">Marcar como Recuperación</span>
-          </div>
+          <label className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-700 rounded-xl cursor-pointer hover:border-purple-500/50 transition-colors">
+            <input type="checkbox" checked={esRecuperacion} onChange={(e) => setEsRecuperacion(e.target.checked)}
+              className="w-4 h-4 accent-purple-500" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Marcar como Recuperación</span>
+          </label>
 
           <button
             onClick={handleAgendar}
             disabled={isSaving}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg transition-all disabled:bg-gray-400 uppercase"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white font-black py-4 rounded-xl shadow-lg transition-all uppercase text-xs tracking-widest"
           >
             {isSaving ? 'Guardando...' : 'Confirmar Cita'}
           </button>
