@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Search, History, TrendingUp, Calendar as CalendarIcon, 
-  CheckCircle2, XCircle, AlertCircle, ArrowRight, Wallet, PlusCircle, ArrowDownRight, ArrowUpRight
+  CheckCircle2, XCircle, AlertCircle, ArrowRight, Wallet, PlusCircle, ArrowDownRight, ArrowUpRight, X, MinusCircle
 } from 'lucide-react';
 
 export default function HistorialPacientesPage() {
@@ -23,6 +23,11 @@ export default function HistorialPacientesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLedgerLoading, setIsLedgerLoading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [adjustAmount, setAdjustAmount] = useState('');
+  const [adjustType, setAdjustType] = useState<'add' | 'remove'>('add');
+  const [adjustObservacion, setAdjustObservacion] = useState('');
+  const [isProcessingAdjust, setIsProcessingAdjust] = useState(false);
 
   // 1. Carga Inicial de Pacientes
   const fetchPacientes = async () => {
@@ -104,6 +109,51 @@ export default function HistorialPacientesPage() {
       alert(`Error al procesar el pago: ${err.message}`);
     } finally {
       setIsProcessingPayment(false);
+    }
+  };
+
+  const handleAjusteManual = async () => {
+    const amount = parseInt(adjustAmount);
+    if (!adjustAmount || isNaN(amount) || amount <= 0) {
+      alert('Ingresa una cantidad válida mayor a 0.');
+      return;
+    }
+    if (!adjustObservacion.trim()) {
+      alert('Agrega una observación para registrar el motivo del ajuste.');
+      return;
+    }
+
+    const cantidadFinal = adjustType === 'remove' ? -amount : amount;
+    const tipoOperacion = adjustType === 'add' ? 'AJUSTE_MANUAL_AGREGAR' : 'AJUSTE_MANUAL_ELIMINAR';
+
+    setIsProcessingAdjust(true);
+    try {
+      const payload = {
+        paciente_id: pacienteSeleccionado.paciente_id,
+        tipo_operacion: tipoOperacion,
+        cantidad: cantidadFinal,
+        observacion: adjustObservacion.trim()
+      };
+
+      const { error } = await supabase.from('paciente_token_ledger').insert([payload]);
+      if (error) throw error;
+
+      await fetchPacientes();
+      if (activeTab === 'billetera') await fetchLedger();
+
+      setPacienteSeleccionado((prev: any) => ({
+        ...prev,
+        saldo_tokens: (prev.saldo_tokens || 0) + cantidadFinal
+      }));
+
+      setShowAdjustModal(false);
+      setAdjustAmount('');
+      setAdjustObservacion('');
+      setAdjustType('add');
+    } catch (err: any) {
+      alert(`Error al procesar el ajuste: ${err.message}`);
+    } finally {
+      setIsProcessingAdjust(false);
     }
   };
 
@@ -196,6 +246,14 @@ export default function HistorialPacientesPage() {
                   >
                     <PlusCircle size={18} className="mr-2" />
                     {isProcessingPayment ? 'Procesando...' : 'Registrar Pago'}
+                  </button>
+
+                  <button 
+                    onClick={() => setShowAdjustModal(true)}
+                    className="bg-slate-700 hover:bg-slate-600 text-white px-5 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-colors shadow-lg flex items-center"
+                  >
+                    <MinusCircle size={18} className="mr-2" />
+                    Ajustar Tokens
                   </button>
                 </div>
               </div>
@@ -351,6 +409,124 @@ export default function HistorialPacientesPage() {
           </div>
         )}
       </section>
+
+      {/* Modal de Ajuste Manual de Tokens */}
+      {showAdjustModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="font-black text-slate-100 uppercase tracking-widest text-sm">
+                Ajuste Manual de Tokens
+              </h3>
+              <button onClick={() => setShowAdjustModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Paciente
+                </label>
+                <div className="text-sm font-bold text-slate-200 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  {pacienteSeleccionado.nombre_completo}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Saldo Actual
+                </label>
+                <div className={`text-lg font-black ${pacienteSeleccionado.saldo_tokens >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {pacienteSeleccionado.saldo_tokens} Tokens
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Tipo de Ajuste
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAdjustType('add')}
+                    className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-colors ${
+                      adjustType === 'add'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    Agregar
+                  </button>
+                  <button
+                    onClick={() => setAdjustType('remove')}
+                    className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-colors ${
+                      adjustType === 'remove'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Cantidad de Tokens
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(e.target.value)}
+                  placeholder="Ej: 2"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                />
+                {adjustAmount && parseInt(adjustAmount) > 0 && (
+                  <div className="mt-2 text-xs font-bold text-slate-400">
+                    Saldo resultante: {
+                      pacienteSeleccionado.saldo_tokens + (adjustType === 'remove' ? -parseInt(adjustAmount) : parseInt(adjustAmount))
+                    } Tokens
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Observación
+                </label>
+                <textarea
+                  value={adjustObservacion}
+                  onChange={(e) => setAdjustObservacion(e.target.value)}
+                  placeholder="Motivo del ajuste..."
+                  rows={3}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center gap-4">
+              <button
+                onClick={() => setShowAdjustModal(false)}
+                className="text-[10px] font-black uppercase text-red-500 hover:text-red-400 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAjusteManual}
+                disabled={isProcessingAdjust || !adjustAmount || !adjustObservacion.trim()}
+                className={`text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg transition-colors ${
+                  isProcessingAdjust || !adjustAmount || !adjustObservacion.trim()
+                    ? 'bg-blue-900/50 text-blue-300 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}
+              >
+                {isProcessingAdjust ? 'Guardando...' : (adjustType === 'add' ? 'Agregar' : 'Quitar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
