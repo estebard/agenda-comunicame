@@ -5,51 +5,107 @@ import { supabase } from '@/lib/supabaseClient';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
-  Search, 
-  History, 
-  TrendingUp, 
-  Calendar as CalendarIcon, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle,
-  ArrowRight
+  Search, History, TrendingUp, Calendar as CalendarIcon, 
+  CheckCircle2, XCircle, AlertCircle, ArrowRight, Wallet, PlusCircle, ArrowDownRight, ArrowUpRight
 } from 'lucide-react';
 
 export default function HistorialPacientesPage() {
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null);
+  
+  // Estados de Dominio
+  const [activeTab, setActiveTab] = useState<'clinico' | 'billetera'>('clinico');
   const [historial, setHistorial] = useState<any[]>([]);
+  const [ledger, setLedger] = useState<any[]>([]);
+  
+  // Estados de UI/UX
   const [isLoading, setIsLoading] = useState(false);
+  const [isLedgerLoading, setIsLedgerLoading] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-  // 1. Cargar lista de pacientes
-  useEffect(() => {
-    async function fetchPacientes() {
-      const { data } = await supabase
-        .from('vw_control_panel_agendamiento')
-        .select('*')
-        .order('nombre_completo');
-      if (data) setPacientes(data);
-    }
-    fetchPacientes();
-  }, []);
+  // 1. Carga Inicial de Pacientes
+  const fetchPacientes = async () => {
+    const { data } = await supabase
+      .from('vw_control_panel_agendamiento')
+      .select('*')
+      .order('nombre_completo');
+    if (data) setPacientes(data);
+  };
 
-  // 2. Cargar historial cuando se selecciona un paciente
+  useEffect(() => { fetchPacientes(); }, []);
+
+  // 2. Carga de Dominio Clínico
   useEffect(() => {
-    if (pacienteSeleccionado) {
+    if (pacienteSeleccionado && activeTab === 'clinico') {
       async function fetchHistorial() {
         setIsLoading(true);
         const { data } = await supabase
-          .from('cita')
-          .select('*, profesional(nombre, especialidad)')
-          .eq('paciente_id', pacienteSeleccionado.paciente_id)
-          .order('fecha_hora_inicio', { ascending: false });
+        .from('cita')
+        .select(`
+          *, 
+          profesional:profesional_id(nombre, especialidad),
+          asistencia:asistencia(id, fecha_hora_ejecucion, estado, observacion, profesional:profesional_id(nombre))
+        `)
+        .eq('paciente_id', pacienteSeleccionado.paciente_id)
+        .order('fecha_hora_inicio', { ascending: false });
         if (data) setHistorial(data);
         setIsLoading(false);
       }
       fetchHistorial();
     }
-  }, [pacienteSeleccionado]);
+  }, [pacienteSeleccionado, activeTab]);
+
+  // 3. Carga de Dominio Transaccional (Ledger)
+  useEffect(() => {
+    if (pacienteSeleccionado && activeTab === 'billetera') {
+      fetchLedger();
+    }
+  }, [pacienteSeleccionado, activeTab]);
+
+  const fetchLedger = async () => {
+    setIsLedgerLoading(true);
+    const { data } = await supabase
+      .from('paciente_token_ledger')
+      .select('*')
+      .eq('paciente_id', pacienteSeleccionado.paciente_id)
+      .order('created_at', { ascending: false });
+    if (data) setLedger(data);
+    setIsLedgerLoading(false);
+  };
+
+  // 4. Mutación DML: Registro de Pago
+  const handleRegistrarPago = async () => {
+    if (!confirm(`¿Confirmar registro de pago para ${pacienteSeleccionado.nombre_completo}? Esto añadirá 4 tokens al saldo actual.`)) return;
+    
+    setIsProcessingPayment(true);
+    try {
+      const payload = {
+        paciente_id: pacienteSeleccionado.paciente_id,
+        tipo_operacion: 'PAGO_CICLO',
+        cantidad: 4,
+        observacion: 'Pago de ciclo mensual registrado manualmente.'
+      };
+
+      const { error } = await supabase.from('paciente_token_ledger').insert([payload]);
+      if (error) throw error;
+
+      // Sincronizar UI tras la mutación atómica
+      await fetchPacientes();
+      if (activeTab === 'billetera') await fetchLedger();
+      
+      // Actualizar el saldo en la vista actual del objeto seleccionado
+      setPacienteSeleccionado((prev: any) => ({
+        ...prev,
+        saldo_tokens: (prev.saldo_tokens || 0) + 4
+      }));
+
+    } catch (err: any) {
+      alert(`Error al procesar el pago: ${err.message}`);
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
 
   const filteredPacientes = pacientes.filter(p => 
     p.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
@@ -78,17 +134,20 @@ export default function HistorialPacientesPage() {
           {filteredPacientes.map(p => (
             <button
               key={p.paciente_id}
-              onClick={() => setPacienteSeleccionado(p)}
+              onClick={() => {
+                setPacienteSeleccionado(p);
+                setActiveTab('clinico'); // Resetea a pestaña clínica al cambiar paciente
+              }}
               className={`w-full text-left p-4 border-b border-slate-800/50 transition-all flex items-center justify-between group ${
                 pacienteSeleccionado?.paciente_id === p.paciente_id ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
               }`}
             >
               <div>
                 <div className="text-sm font-bold">{p.nombre_completo}</div>
-                <div className={`text-[10px] font-black uppercase ${
+                <div className={`text-[10px] font-black uppercase mt-0.5 ${
                    pacienteSeleccionado?.paciente_id === p.paciente_id ? 'text-blue-200' : 'text-slate-500'
                 }`}>
-                  Saldo: {p.saldo_tokens} Tokens
+                  Saldo: {p.saldo_tokens || 0} Tokens
                 </div>
               </div>
               <ArrowRight size={16} className={`opacity-0 group-hover:opacity-100 transition-opacity ${
@@ -113,89 +172,182 @@ export default function HistorialPacientesPage() {
                   <div className="flex items-center gap-4 mt-2">
                     <span className="flex items-center text-xs font-bold text-slate-400">
                       <CalendarIcon size={14} className="mr-1 text-blue-500" /> 
-                      Ingreso: {new Date(pacienteSeleccionado.proxima_fecha_corte).toLocaleDateString()}
+                      Ingreso: {pacienteSeleccionado.proxima_fecha_corte ? new Date(pacienteSeleccionado.proxima_fecha_corte).toLocaleDateString() : 'S/I'}
                     </span>
                     <span className="flex items-center text-xs font-bold text-slate-400">
                       <TrendingUp size={14} className="mr-1 text-green-500" /> 
-                      Estado: {pacienteSeleccionado.estado_operativo}
+                      Estado: {pacienteSeleccionado.estado_operativo || 'ACTIVO'}
                     </span>
                   </div>
                 </div>
-                <div className="bg-slate-900 px-6 py-3 rounded-2xl border border-slate-800 text-center">
-                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo Actual</div>
-                  <div className={`text-2xl font-black ${pacienteSeleccionado.saldo_tokens >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {pacienteSeleccionado.saldo_tokens} <span className="text-xs uppercase">Tokens</span>
+                
+                <div className="flex gap-4 items-center">
+                  <div className="bg-slate-900 px-6 py-2 rounded-2xl border border-slate-800 text-center">
+                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo Actual</div>
+                    <div className={`text-2xl font-black ${(pacienteSeleccionado.saldo_tokens || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {pacienteSeleccionado.saldo_tokens || 0} <span className="text-xs uppercase">Tokens</span>
+                    </div>
                   </div>
+                  
+                  <button 
+                    onClick={handleRegistrarPago}
+                    disabled={isProcessingPayment}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white px-5 py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-colors shadow-lg flex items-center"
+                  >
+                    <PlusCircle size={18} className="mr-2" />
+                    {isProcessingPayment ? 'Procesando...' : 'Registrar Pago'}
+                  </button>
                 </div>
               </div>
             </header>
 
-            {/* Listado de Movimientos */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <h3 className="flex items-center text-sm font-black text-blue-400 uppercase tracking-widest">
-                <History className="mr-2" size={18} /> Mapa de Movimientos / Historial
-              </h3>
+            {/* Sistema de Pestañas */}
+            <div className="flex bg-slate-950 border-b border-slate-800 px-6 pt-2 gap-2">
+              <button 
+                onClick={() => setActiveTab('clinico')}
+                className={`px-4 py-3 text-xs font-black uppercase tracking-widest rounded-t-lg transition-colors flex items-center ${
+                  activeTab === 'clinico' ? 'bg-slate-900 text-blue-400 border-t border-x border-slate-800' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <History size={14} className="mr-2" /> Historial Clínico
+              </button>
+              <button 
+                onClick={() => setActiveTab('billetera')}
+                className={`px-4 py-3 text-xs font-black uppercase tracking-widest rounded-t-lg transition-colors flex items-center ${
+                  activeTab === 'billetera' ? 'bg-slate-900 text-green-400 border-t border-x border-slate-800' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <Wallet size={14} className="mr-2" /> Billetera / Tokens
+              </button>
+            </div>
 
-              {isLoading ? (
-                <div className="h-40 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                </div>
-              ) : historial.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 font-bold uppercase text-xs tracking-widest border-2 border-dashed border-slate-800 rounded-3xl">
-                  Sin registros previos en el sistema
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {historial.map((cita) => (
-                    <div key={cita.id} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex items-start gap-4 hover:border-slate-700 transition-all group">
-                      <div className={`mt-1 p-2 rounded-lg ${
-                        cita.estado === 'ASISTE' ? 'bg-green-900/30 text-green-500' : 
-                        cita.estado === 'NO_ASISTE' ? 'bg-red-900/30 text-red-500' : 'bg-slate-800 text-slate-500'
-                      }`}>
-                        {cita.estado === 'ASISTE' ? <CheckCircle2 size={20} /> : 
-                         cita.estado === 'NO_ASISTE' ? <XCircle size={20} /> : <AlertCircle size={20} />}
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="text-sm font-black text-slate-200 uppercase">
-                              {format(new Date(cita.fecha_hora_inicio), "EEEE dd 'de' MMMM, yyyy", { locale: es })}
-                            </div>
-                            <div className="text-xs font-bold text-blue-400 uppercase mt-0.5">
-                              {cita.profesional?.especialidad} — {cita.profesional?.nombre} ({format(new Date(cita.fecha_hora_inicio), "HH:mm")} hrs)
-                            </div>
+            {/* Contenedor de Vistas (Renderizado Condicional) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              
+              {/* VISTA 1: Historial Clínico */}
+              {activeTab === 'clinico' && (
+                <>
+                  {isLoading ? (
+                    <div className="h-40 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                  ) : historial.length === 0 ? (
+                    <div className="text-center py-20 text-slate-600 font-bold uppercase text-xs tracking-widest border-2 border-dashed border-slate-800 rounded-3xl">
+                      Sin registros clínicos previos
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {historial.map((cita) => (
+                        <div key={cita.id} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex items-start gap-4 hover:border-slate-700 transition-all">
+                          <div className={`mt-1 p-2 rounded-lg ${
+                            cita.estado === 'ASISTE' ? 'bg-green-900/30 text-green-500' : 
+                            cita.estado === 'NO_ASISTE' ? 'bg-red-900/30 text-red-500' : 'bg-slate-800 text-slate-500'
+                          }`}>
+                            {cita.estado === 'ASISTE' ? <CheckCircle2 size={20} /> : 
+                             cita.estado === 'NO_ASISTE' ? <XCircle size={20} /> : <AlertCircle size={20} />}
                           </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
-                              cita.estado === 'ASISTE' ? 'bg-green-900/50 text-green-400' : 'bg-slate-800 text-slate-400'
-                            }`}>
-                              {cita.estado}
-                            </span>
-                            {cita.es_recuperacion && (
-                              <span className="bg-orange-900/50 text-orange-400 text-[9px] font-black px-2 py-0.5 rounded uppercase">
-                                Recuperación
+                          
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="text-sm font-black text-slate-200 uppercase">
+                                  {format(new Date(cita.fecha_hora_inicio), "EEEE dd 'de' MMMM, yyyy", { locale: es })}
+                                </div>
+                                <div className="text-xs font-bold text-blue-400 uppercase mt-0.5">
+                                  {cita.profesional?.especialidad} — {cita.profesional?.nombre} ({format(new Date(cita.fecha_hora_inicio), "HH:mm")} hrs)
+                                </div>
+                              </div>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                                cita.estado === 'ASISTE' ? 'bg-green-900/50 text-green-400' : 'bg-slate-800 text-slate-400'
+                              }`}>
+                                {cita.estado}
                               </span>
+                            </div>
+
+                            {cita.observacion && (
+                              <div className="mt-3 p-3 bg-slate-900/50 border-l-2 border-slate-700 text-xs text-slate-400 italic rounded-r-lg">
+                                "{cita.observacion}"
+                              </div>
+                            )}
+                            {cita.asistencia && cita.asistencia.length > 0 && (
+                              <div className="mt-3 p-3 bg-slate-900 border border-slate-700 rounded-lg space-y-2">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-1">
+                                  Detalle de Ejecución Operativa
+                                </div>
+                                {cita.asistencia.map((asis: any) => (
+                                  <div key={asis.id} className="flex justify-between items-center text-xs">
+                                    <div>
+                                      <span className="font-bold text-slate-300">
+                                        {format(new Date(asis.fecha_hora_ejecucion), "HH:mm")} hrs
+                                      </span>
+                                      <span className="text-slate-500 mx-2">|</span>
+                                      <span className="text-blue-400 font-bold uppercase">{asis.profesional?.nombre}</span>
+                                    </div>
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                                      asis.estado === 'ASISTE' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                    }`}>
+                                      {asis.estado}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
-
-                        {cita.observacion && (
-                          <div className="mt-3 p-3 bg-slate-900/50 border-l-2 border-slate-700 text-xs text-slate-400 italic rounded-r-lg">
-                            "{cita.observacion}"
-                          </div>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
+
+              {/* VISTA 2: Ledger de Billetera/Tokens */}
+              {activeTab === 'billetera' && (
+                <>
+                  {isLedgerLoading ? (
+                    <div className="h-40 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                    </div>
+                  ) : ledger.length === 0 ? (
+                    <div className="text-center py-20 text-slate-600 font-bold uppercase text-xs tracking-widest border-2 border-dashed border-slate-800 rounded-3xl">
+                      Sin movimientos financieros registrados
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {ledger.map((mov) => {
+                        const isIngreso = mov.cantidad > 0;
+                        return (
+                          <div key={mov.id} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex items-center justify-between hover:border-slate-700 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className={`p-3 rounded-xl ${isIngreso ? 'bg-green-900/30 text-green-500' : 'bg-amber-900/30 text-amber-500'}`}>
+                                {isIngreso ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                              </div>
+                              <div>
+                                <div className="text-xs font-black text-slate-200 uppercase tracking-widest">
+                                  {mov.tipo_operacion.replace(/_/g, ' ')}
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-500 mt-1">
+                                  {format(new Date(mov.created_at), "dd/MM/yyyy HH:mm")}
+                                  {mov.observacion && <span className="ml-2 italic">— "{mov.observacion}"</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className={`text-lg font-black ${isIngreso ? 'text-green-400' : 'text-amber-400'}`}>
+                              {isIngreso ? '+' : ''}{mov.cantidad}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
             </div>
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-700">
             <History size={64} className="mb-4 opacity-20" />
-            <p className="font-black uppercase text-sm tracking-tighter">Selecciona un niño/a para ver su historial clínico</p>
+            <p className="font-black uppercase text-sm tracking-tighter">Selecciona un niño/a para administrar su ficha</p>
           </div>
         )}
       </section>

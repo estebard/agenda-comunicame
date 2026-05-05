@@ -20,7 +20,7 @@ export default function Sidebar() {
 
   const menuItems = [
     { name: 'Dashboard General', icon: LayoutDashboard, href: '/' },
-    { name: 'Agenda Oficial (Mensual)', icon: CalendarDays, href: '/planificacion' },
+    { name: 'Agenda Oficial (Semanal)', icon: CalendarDays, href: '/planificacion' },
     { name: 'Asistencia Diaria', icon: CalendarClock, href: '/asistencia' },
     { name: 'Pacientes / Historial', icon: Users, href: '/pacientes' },
     { name: 'Informes Solicitados', icon: FileText, href: '/informes' },
