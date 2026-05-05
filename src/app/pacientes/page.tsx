@@ -6,7 +6,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Search, History, TrendingUp, Calendar as CalendarIcon, 
-  CheckCircle2, XCircle, AlertCircle, ArrowRight, Wallet, PlusCircle, ArrowDownRight, ArrowUpRight, X, MinusCircle
+  CheckCircle2, XCircle, AlertCircle, ArrowRight, Wallet, PlusCircle, ArrowDownRight, ArrowUpRight, X, MinusCircle,
+  UserPlus, Edit3, Trash2
 } from 'lucide-react';
 
 export default function HistorialPacientesPage() {
@@ -28,6 +29,14 @@ export default function HistorialPacientesPage() {
   const [adjustType, setAdjustType] = useState<'add' | 'remove'>('add');
   const [adjustObservacion, setAdjustObservacion] = useState('');
   const [isProcessingAdjust, setIsProcessingAdjust] = useState(false);
+
+  const [showPacienteForm, setShowPacienteForm] = useState(false);
+  const [editingPaciente, setEditingPaciente] = useState<any>(null);
+  const [formNombre, setFormNombre] = useState('');
+  const [formApellido, setFormApellido] = useState('');
+  const [formApoderado, setFormApoderado] = useState('');
+  const [formFechaNacimiento, setFormFechaNacimiento] = useState('');
+  const [isProcessingPaciente, setIsProcessingPaciente] = useState(false);
 
   // 1. Carga Inicial de Pacientes
   const fetchPacientes = async () => {
@@ -157,6 +166,91 @@ export default function HistorialPacientesPage() {
     }
   };
 
+  const resetPacienteForm = () => {
+    setFormNombre('');
+    setFormApellido('');
+    setFormApoderado('');
+    setFormFechaNacimiento('');
+    setEditingPaciente(null);
+  };
+
+  const openNewPaciente = () => {
+    resetPacienteForm();
+    setShowPacienteForm(true);
+  };
+
+  const openEditPaciente = (paciente: any) => {
+    setEditingPaciente(paciente);
+    const partes = paciente.nombre_completo.split(' ');
+    const apellidoIdx = partes.findIndex((p: string) => p.toLowerCase() !== partes[0]?.toLowerCase());
+    setFormNombre(partes[0] || '');
+    setFormApellido(apellidoIdx > 0 ? partes.slice(apellidoIdx).join(' ') : partes.slice(1).join(' '));
+    setFormApoderado(paciente.apoderado || '');
+    setFormFechaNacimiento(paciente.fecha_nacimiento ? format(new Date(paciente.fecha_nacimiento), 'yyyy-MM-dd') : '');
+    setShowPacienteForm(true);
+  };
+
+  const handleSavePaciente = async () => {
+    if (!formNombre.trim() || !formApellido.trim()) {
+      alert('Nombre y apellidos son obligatorios.');
+      return;
+    }
+    if (!formApoderado.trim()) {
+      alert('El apoderado o tutor es obligatorio.');
+      return;
+    }
+
+    setIsProcessingPaciente(true);
+    try {
+      const nombreCompleto = `${formNombre.trim()} ${formApellido.trim()}`;
+      const payload: any = {
+        nombre_completo: nombreCompleto,
+        apoderado: formApoderado.trim(),
+        fecha_nacimiento: formFechaNacimiento || null
+      };
+
+      if (editingPaciente) {
+        const { error } = await supabase
+          .from('paciente')
+          .update(payload)
+          .eq('id', editingPaciente.paciente_id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('paciente')
+          .insert([payload]);
+        if (error) throw error;
+      }
+
+      await fetchPacientes();
+      setShowPacienteForm(false);
+      resetPacienteForm();
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
+    } finally {
+      setIsProcessingPaciente(false);
+    }
+  };
+
+  const handleDeletePaciente = async (paciente: any) => {
+    if (!confirm(`¿Eliminar a ${paciente.nombre_completo}? Esta acción no se puede deshacer.`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('paciente')
+        .delete()
+        .eq('id', paciente.paciente_id);
+      if (error) throw error;
+
+      if (pacienteSeleccionado?.paciente_id === paciente.paciente_id) {
+        setPacienteSeleccionado(null);
+      }
+      await fetchPacientes();
+    } catch (err: any) {
+      alert(`Error al eliminar: ${err.message}`);
+    }
+  };
+
   const filteredPacientes = pacientes.filter(p => 
     p.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -178,32 +272,69 @@ export default function HistorialPacientesPage() {
         </div>
 
         <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl overflow-y-auto shadow-inner">
-          <div className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800">
+        <div className="flex items-center justify-between">
+          <div className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">
             Nómina de Pacientes
           </div>
+          <button
+            onClick={openNewPaciente}
+            className="mr-3 p-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+            title="Agregar paciente"
+          >
+            <UserPlus size={14} className="text-white" />
+          </button>
+        </div>
           {filteredPacientes.map(p => (
-            <button
+            <div
               key={p.paciente_id}
-              onClick={() => {
-                setPacienteSeleccionado(p);
-                setActiveTab('clinico'); // Resetea a pestaña clínica al cambiar paciente
-              }}
-              className={`w-full text-left p-4 border-b border-slate-800/50 transition-all flex items-center justify-between group ${
+              className={`w-full border-b border-slate-800/50 transition-all group ${
                 pacienteSeleccionado?.paciente_id === p.paciente_id ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'
               }`}
             >
-              <div>
-                <div className="text-sm font-bold">{p.nombre_completo}</div>
-                <div className={`text-[10px] font-black uppercase mt-0.5 ${
-                   pacienteSeleccionado?.paciente_id === p.paciente_id ? 'text-blue-200' : 'text-slate-500'
-                }`}>
-                  Saldo: {p.saldo_tokens || 0} Tokens
+              <button
+                onClick={() => {
+                  setPacienteSeleccionado(p);
+                  setActiveTab('clinico');
+                }}
+                className="w-full text-left p-4 flex items-center justify-between"
+              >
+                <div>
+                  <div className="text-sm font-bold">{p.nombre_completo}</div>
+                  <div className={`text-[10px] font-black uppercase mt-0.5 ${
+                     pacienteSeleccionado?.paciente_id === p.paciente_id ? 'text-blue-200' : 'text-slate-500'
+                  }`}>
+                    Saldo: {p.saldo_tokens || 0} Tokens
+                  </div>
                 </div>
+                <ArrowRight size={16} className={`opacity-0 group-hover:opacity-100 transition-opacity ${
+                   pacienteSeleccionado?.paciente_id === p.paciente_id ? 'opacity-100' : ''
+                }`} />
+              </button>
+              <div className="flex justify-end px-2 pb-2 gap-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEditPaciente(p); }}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    pacienteSeleccionado?.paciente_id === p.paciente_id
+                      ? 'text-blue-200 hover:bg-blue-700'
+                      : 'text-slate-500 hover:bg-slate-700 hover:text-slate-300'
+                  }`}
+                  title="Editar"
+                >
+                  <Edit3 size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeletePaciente(p); }}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    pacienteSeleccionado?.paciente_id === p.paciente_id
+                      ? 'text-blue-200 hover:bg-red-700 hover:text-red-300'
+                      : 'text-slate-500 hover:bg-red-900/50 hover:text-red-500'
+                  }`}
+                  title="Eliminar"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
-              <ArrowRight size={16} className={`opacity-0 group-hover:opacity-100 transition-opacity ${
-                 pacienteSeleccionado?.paciente_id === p.paciente_id ? 'opacity-100' : ''
-              }`} />
-            </button>
+            </div>
           ))}
         </div>
       </section>
@@ -522,6 +653,95 @@ export default function HistorialPacientesPage() {
                 }`}
               >
                 {isProcessingAdjust ? 'Guardando...' : (adjustType === 'add' ? 'Agregar' : 'Quitar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear / Editar Paciente */}
+      {showPacienteForm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-md border border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-950 p-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="font-black text-slate-100 uppercase tracking-widest text-sm">
+                {editingPaciente ? 'Editar Paciente' : 'Nuevo Paciente'}
+              </h3>
+              <button onClick={() => { setShowPacienteForm(false); resetPacienteForm(); }} className="text-slate-400 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formNombre}
+                  onChange={(e) => setFormNombre(e.target.value)}
+                  placeholder="Nombre"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Apellidos <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formApellido}
+                  onChange={(e) => setFormApellido(e.target.value)}
+                  placeholder="Apellidos"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Apoderado / Tutor <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formApoderado}
+                  onChange={(e) => setFormApoderado(e.target.value)}
+                  placeholder="Nombre del apoderado o tutor"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                  Fecha de Nacimiento
+                </label>
+                <input
+                  type="date"
+                  value={formFechaNacimiento}
+                  onChange={(e) => setFormFechaNacimiento(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center gap-4">
+              <button
+                onClick={() => { setShowPacienteForm(false); resetPacienteForm(); }}
+                className="text-[10px] font-black uppercase text-red-500 hover:text-red-400 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSavePaciente}
+                disabled={isProcessingPaciente || !formNombre.trim() || !formApellido.trim() || !formApoderado.trim()}
+                className={`text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg transition-colors ${
+                  isProcessingPaciente || !formNombre.trim() || !formApellido.trim() || !formApoderado.trim()
+                    ? 'bg-blue-900/50 text-blue-300 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}
+              >
+                {isProcessingPaciente ? 'Guardando...' : (editingPaciente ? 'Actualizar' : 'Crear')}
               </button>
             </div>
           </div>
