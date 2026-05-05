@@ -33,7 +33,6 @@ export default function HistorialPacientesPage() {
   const [showPacienteForm, setShowPacienteForm] = useState(false);
   const [editingPaciente, setEditingPaciente] = useState<any>(null);
   const [formNombre, setFormNombre] = useState('');
-  const [formApellido, setFormApellido] = useState('');
   const [formApoderado, setFormApoderado] = useState('');
   const [formFechaNacimiento, setFormFechaNacimiento] = useState('');
   const [isProcessingPaciente, setIsProcessingPaciente] = useState(false);
@@ -168,7 +167,6 @@ export default function HistorialPacientesPage() {
 
   const resetPacienteForm = () => {
     setFormNombre('');
-    setFormApellido('');
     setFormApoderado('');
     setFormFechaNacimiento('');
     setEditingPaciente(null);
@@ -181,18 +179,15 @@ export default function HistorialPacientesPage() {
 
   const openEditPaciente = (paciente: any) => {
     setEditingPaciente(paciente);
-    const partes = paciente.nombre_completo.split(' ');
-    const apellidoIdx = partes.findIndex((p: string) => p.toLowerCase() !== partes[0]?.toLowerCase());
-    setFormNombre(partes[0] || '');
-    setFormApellido(apellidoIdx > 0 ? partes.slice(apellidoIdx).join(' ') : partes.slice(1).join(' '));
-    setFormApoderado(paciente.apoderado || '');
+    setFormNombre(paciente.nombre_completo || '');
+    setFormApoderado(paciente.nombre_apoderado || '');
     setFormFechaNacimiento(paciente.fecha_nacimiento ? format(new Date(paciente.fecha_nacimiento), 'yyyy-MM-dd') : '');
     setShowPacienteForm(true);
   };
 
   const handleSavePaciente = async () => {
-    if (!formNombre.trim() || !formApellido.trim()) {
-      alert('Nombre y apellidos son obligatorios.');
+    if (!formNombre.trim()) {
+      alert('El nombre completo es obligatorio.');
       return;
     }
     if (!formApoderado.trim()) {
@@ -202,10 +197,9 @@ export default function HistorialPacientesPage() {
 
     setIsProcessingPaciente(true);
     try {
-      const nombreCompleto = `${formNombre.trim()} ${formApellido.trim()}`;
       const payload: any = {
-        nombre_completo: nombreCompleto,
-        apoderado: formApoderado.trim(),
+        nombre_completo: formNombre.trim(),
+        nombre_apoderado: formApoderado.trim(),
         fecha_nacimiento: formFechaNacimiento || null
       };
 
@@ -216,6 +210,7 @@ export default function HistorialPacientesPage() {
           .eq('id', editingPaciente.paciente_id);
         if (error) throw error;
       } else {
+        payload.fecha_ingreso = new Date().toISOString().split('T')[0];
         const { error } = await supabase
           .from('paciente')
           .insert([payload]);
@@ -675,26 +670,13 @@ export default function HistorialPacientesPage() {
             <div className="p-6 space-y-5 overflow-y-auto">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                  Nombre <span className="text-red-500">*</span>
+                  Nombre Completo <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formNombre}
                   onChange={(e) => setFormNombre(e.target.value)}
-                  placeholder="Nombre"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                  Apellidos <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formApellido}
-                  onChange={(e) => setFormApellido(e.target.value)}
-                  placeholder="Apellidos"
+                  placeholder="Nombre y apellidos"
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:border-blue-500 outline-none"
                 />
               </div>
@@ -734,9 +716,9 @@ export default function HistorialPacientesPage() {
               </button>
               <button
                 onClick={handleSavePaciente}
-                disabled={isProcessingPaciente || !formNombre.trim() || !formApellido.trim() || !formApoderado.trim()}
+                disabled={isProcessingPaciente || !formNombre.trim() || !formApoderado.trim()}
                 className={`text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg transition-colors ${
-                  isProcessingPaciente || !formNombre.trim() || !formApellido.trim() || !formApoderado.trim()
+                  isProcessingPaciente || !formNombre.trim() || !formApoderado.trim()
                     ? 'bg-blue-900/50 text-blue-300 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-500 text-white'
                 }`}
