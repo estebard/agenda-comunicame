@@ -107,15 +107,6 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setIsSaving(true);
 
     try {
-      // Obtener paciente_id de la cita (para token)
-      const { data: citaData } = await supabase
-        .from('cita')
-        .select('paciente_id')
-        .eq('id', targetCitaId)
-        .single();
-
-      let newAsistenciaId: string | null = null;
-
       if (bloqueExistente?.isEjecucion) {
         const { error: errAsistencia } = await supabase.from('asistencia').update({
           profesional_id: profesionalId,
@@ -128,43 +119,20 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
         const [h, m] = hora.split(':').map(Number);
         inicioEjecucion.setHours(h, m, 0, 0);
 
-        const { data: inserted, error: errAsistencia } = await supabase.from('asistencia').insert([{
+        const { error: errAsistencia } = await supabase.from('asistencia').insert([{
           cita_oficial_id: targetCitaId,
           profesional_id: profesionalId,
           fecha_hora_ejecucion: inicioEjecucion.toISOString(),
           estado,
           observacion
-        }]).select('id');
-
+        }]);
         if (errAsistencia) throw errAsistencia;
-        newAsistenciaId = inserted?.[0]?.id || null;
       }
 
       const { error: errCita } = await supabase.from('cita')
         .update({ observacion })
         .eq('id', targetCitaId);
       if (errCita) throw new Error(`Error sincronizando cita maestra: ${errCita.message}`);
-
-      // Descontar token si asiste (solo primera vez)
-      const debeDescontar = estado === 'ASISTE' && (
-        newAsistenciaId !== null ||
-        (bloqueExistente?.isEjecucion && bloqueExistente.estado !== 'ASISTE')
-      );
-
-      if (debeDescontar && citaData?.paciente_id) {
-        const ledgerPayload: any = {
-          paciente_id: citaData.paciente_id,
-          tipo_operacion: 'CONSUMO_SESION',
-          cantidad: -1,
-          observacion: 'Consumo de 1 sesión'
-        };
-        if (newAsistenciaId) {
-          ledgerPayload.referencia_asistencia_id = newAsistenciaId;
-        } else if (bloqueExistente?.asistenciaId) {
-          ledgerPayload.referencia_asistencia_id = bloqueExistente.asistenciaId;
-        }
-        await supabase.from('paciente_token_ledger').insert([ledgerPayload]);
-      }
 
       onSuccess();
       onClose();
