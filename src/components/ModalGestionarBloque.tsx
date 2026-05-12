@@ -107,6 +107,21 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setIsSaving(true);
 
     try {
+      // Validar que la cita no tenga ya una asistencia registrada (evitar duplicados)
+      if (!bloqueExistente?.isEjecucion && targetCitaId) {
+        const { data: existente } = await supabase
+          .from('asistencia')
+          .select('id, estado')
+          .eq('cita_oficial_id', targetCitaId)
+          .maybeSingle();
+
+        if (existente) {
+          alert(`Esta cita ya fue registrada hoy (estado: ${existente.estado}).\nNo puedes crear una asistencia duplicada.`);
+          setIsSaving(false);
+          return;
+        }
+      }
+
       if (bloqueExistente?.isEjecucion) {
         const { error: errAsistencia } = await supabase.from('asistencia').update({
           profesional_id: profesionalId,
