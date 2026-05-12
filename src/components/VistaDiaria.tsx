@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { format, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw, FileSpreadsheet, FileText } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw, FileSpreadsheet, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import ModalGestionarBloque from './ModalGestionarBloque';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -50,11 +50,14 @@ export default function VistaDiaria() {
   const [bloques, setBloques] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [fechaTexto, setFechaTexto] = useState(format(fecha, 'dd/MM/yyyy'));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<any>(null);
 
   useEffect(() => {
+    setFechaTexto(format(fecha, 'dd/MM/yyyy'));
     const params = new URLSearchParams(searchParams.toString());
     params.set('fecha', format(fecha, 'yyyy-MM-dd'));
     router.replace(`?${params.toString()}`, { scroll: false });
@@ -87,7 +90,17 @@ export default function VistaDiaria() {
 
     if (errCitas) console.error("Error DQL Citas:", errCitas);
 
-    // 3. Consolidación de Entidades (Deduplicación por Integridad Referencial)
+    // 3. Datos del mes completo para estadísticas
+    const inicioMes = startOfMonth(fecha).toISOString();
+    const finMes = endOfMonth(fecha).toISOString();
+    const { data: asistenciasMes } = await supabase
+      .from('asistencia')
+      .select('id, estado, profesional_id, cita:cita_oficial_id(paciente:paciente_id(nombre_completo, tokens_disponibles), es_recuperacion)')
+      .gte('fecha_hora_ejecucion', inicioMes)
+      .lte('fecha_hora_ejecucion', finMes);
+    setMonthlyData(asistenciasMes || []);
+
+    // 4. Consolidación de Entidades (Deduplicación por Integridad Referencial)
     const citasConAsistencia = new Set(asistencias?.map((a: any) => a.cita?.id).filter(Boolean));
 
     const asistenciasMap = (asistencias || []).map((a: any) => ({
@@ -137,6 +150,27 @@ export default function VistaDiaria() {
   useEffect(() => { 
     fetchData(); 
   }, [fecha]);
+
+  const avanzarDia = (n: number) => {
+    const d = new Date(fecha);
+    d.setDate(d.getDate() + n);
+    setFecha(d);
+  };
+
+  const parsearFechaManual = (val: string) => {
+    setFechaTexto(val);
+    const match = val.replace(/\s/g, '').match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (match) {
+      let year = parseInt(match[3]);
+      if (year < 100) year += 2000;
+      const month = parseInt(match[2]) - 1;
+      const day = parseInt(match[1]);
+      const d = new Date(year, month, day, 12);
+      if (!isNaN(d.getTime()) && d.getMonth() === month && d.getDate() === day) {
+        setFecha(d);
+      }
+    }
+  };
 
   const openModal = (hora: string, profesional: any, bloque: any) => {
     if (hora === '13:00') return; 
@@ -188,72 +222,49 @@ export default function VistaDiaria() {
     return rows;
   };
 
-  const gridParaPDF = () => {
-    const head = ['Hora', ...profesionales.map((p: any) => p.nombre)];
-    const body = HORARIOS.filter(h => h !== '13:00').map(hora => {
-      const row: string[] = [hora];
-      profesionales.forEach((p: any) => {
-        const celdas = bloques.filter(b => b.profesionalId === p.id && b.horaRender === hora);
-        if (celdas.length === 0) { row.push('—'); return; }
-        row.push(celdas.map((b: any) => {
-          const partes = [
-            b.paciente?.nombre_completo || '?',
-            b.estado + (b.esRecuperacion ? ' (R)' : ''),
-          ];
-          if (b.observacion) partes.push('Obs: ' + b.observacion);
-          const tok = b.paciente?.tokens_disponibles;
-          if (tok !== null && tok !== undefined) partes.push('Tok: ' + tok);
-          if (b.paciente?.nombre_apoderado) partes.push('Ap: ' + b.paciente.nombre_apoderado);
-          return partes.join(' | ');
-        }).join(' ═══ '));
-      });
-      return row;
-    });
-    return { head, body };
-  };
-
   const resumenParaPDF = () => {
-    const asiste = bloques.filter((b: any) => b.estado === 'ASISTE').length;
-    const noAsiste = bloques.filter((b: any) => b.estado === 'NO_ASISTE').length;
-    const confirmada = bloques.filter((b: any) => b.estado === 'CONFIRMADA').length;
-    const pendiente = bloques.filter((b: any) => b.estado === 'AGENDADA').length;
-    const total = bloques.length;
-    const recuperaciones = bloques.filter((b: any) => b.esRecuperacion).length;
-    const pacientesUnicos = new Set(bloques.map((b: any) => b.paciente?.nombre_completo).filter(Boolean)).size;
+    // Estadísticas del MES COMPLETO
+    const m = monthlyData;
+    const asiste = m.filter((b: any) => b.estado === 'ASISTE').length;
+    const noAsiste = m.filter((b: any) => b.estado === 'NO_ASISTE').length;
+    const confirmada = m.filter((b: any) => b.estado === 'CONFIRMADA').length;
+    const total = m.length;
+    const recuperaciones = m.filter((b: any) => b.cita?.es_recuperacion).length;
+    const pacientesUnicos = new Set(m.map((b: any) => b.cita?.paciente?.nombre_completo).filter(Boolean)).size;
     const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) + '%' : '0%';
 
     const resumen = [
-      ['Total sesiones', String(total)],
+      ['Total sesiones en el mes', String(total)],
       ['Asistencias (ASISTE)', `${asiste} (${pct(asiste)})`],
       ['Inasistencias (NO_ASISTE)', `${noAsiste} (${pct(noAsiste)})`],
       ['Confirmadas', `${confirmada} (${pct(confirmada)})`],
-      ['Pendientes (AGENDADA)', `${pendiente} (${pct(pendiente)})`],
       ['Sesiones de recuperación', `${recuperaciones} (${pct(recuperaciones)})`],
       ['Pacientes únicos', String(pacientesUnicos)],
       ['Profesionales activos', String(profesionales.length)],
     ];
 
-    // Por profesional
-    const porProf = profesionales.map((p: any) => {
-      const cells = bloques.filter((b: any) => b.profesionalId === p.id);
+    // Por profesional (mes)
+    const promsActivos = profesionales.filter((p: any) =>
+      m.some((b: any) => b.profesional_id === p.id)
+    );
+    const porProf = promsActivos.map((p: any) => {
+      const cells = m.filter((b: any) => b.profesional_id === p.id);
       const a = cells.filter((b: any) => b.estado === 'ASISTE').length;
       const na = cells.filter((b: any) => b.estado === 'NO_ASISTE').length;
       const c = cells.filter((b: any) => b.estado === 'CONFIRMADA').length;
-      const ag = cells.filter((b: any) => b.estado === 'AGENDADA').length;
-      return [p.nombre, String(cells.length), String(a), String(na), String(c), String(ag)];
+      return [p.nombre, String(cells.length), String(a), String(na), String(c)];
     });
 
-    // Por paciente
+    // Por paciente (mes)
     const pacMap: Record<string, any> = {};
-    bloques.forEach((b: any) => {
-      const name = b.paciente?.nombre_completo || '?';
-      if (!pacMap[name]) pacMap[name] = { count: 0, estados: new Set(), tokens: b.paciente?.tokens_disponibles || 0 };
+    m.forEach((b: any) => {
+      const name = b.cita?.paciente?.nombre_completo || '?';
+      if (!pacMap[name]) pacMap[name] = { count: 0, tokens: b.cita?.paciente?.tokens_disponibles || 0 };
       pacMap[name].count++;
-      pacMap[name].estados.add(b.estado);
     });
-    const porPac = Object.entries(pacMap).map(([name, d]) => [
-      name, String(d.count), [...(d.estados as Set<string>)].join(', '), String(d.tokens)
-    ]);
+    const porPac = Object.entries(pacMap)
+      .sort(([, a], [, b]) => b.count - a.count)
+      .map(([name, d]) => [name, String(d.count), String(d.tokens)]);
 
     // Alertas tokens bajos
     const bajaTokens = Object.entries(pacMap)
@@ -266,63 +277,84 @@ export default function VistaDiaria() {
   const exportarPDF = () => {
     setIsExporting(true);
     const doc = new jsPDF({ orientation: 'landscape' });
-    const titulo = `Informe de Asistencia — ${format(fecha, "EEEE dd/MM/yyyy", { locale: es })}`;
+    const nombreMes = format(fecha, "MMMM yyyy", { locale: es });
+
+    // Encabezado
     doc.setFontSize(14);
-    doc.text(titulo, 14, 15);
+    doc.text(`Informe de Asistencia — ${format(fecha, "EEEE dd/MM/yyyy", { locale: es })}`, 14, 15);
     doc.setFontSize(9);
     doc.text('Centro Comunícame', 14, 22);
 
-    // Sección 1: Grilla
-    const { head: gridHead, body: gridBody } = gridParaPDF();
+    // Sección 1: Tabla plana del día
+    doc.setFontSize(10);
+    doc.text('Registros del día', 14, 30);
+    const rows = rowsParaReporte();
     autoTable(doc, {
-      startY: 28,
-      head: [gridHead],
-      body: gridBody,
-      styles: { fontSize: 5, cellPadding: 1.5, overflow: 'linebreak' },
-      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', halign: 'center' },
-      columnStyles: { 0: { cellWidth: 12, fontStyle: 'bold' } },
+      startY: 33,
+      head: [['Hora', 'Profesional', 'Paciente', 'Estado', 'Recup.', 'Observación', 'Tokens', 'Apoderado', 'Agenda Of.']],
+      body: rows.map(r => [r.hora, r.profesional, r.paciente, r.estado, r.recuperacion, r.observacion || '—', String(r.tokens), r.apoderado, r.agendaOficial]),
+      styles: { fontSize: 6, cellPadding: 2 },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [243, 244, 246] },
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 22 }, 2: { cellWidth: 35 }, 3: { cellWidth: 14 }, 4: { cellWidth: 10 }, 6: { cellWidth: 12 }, 7: { cellWidth: 25 }, 8: { cellWidth: 28 } },
     });
-    let y = (doc as any).lastAutoTable.finalY;
+    let y = (doc as any).lastAutoTable.finalY + 8;
 
-    // Sección 2: Resumen general
+    // Sección 2: Resumen general del MES
     const { resumen, porProf, porPac, bajaTokens } = resumenParaPDF();
+    doc.setFontSize(10);
+    doc.text(`Resumen general — ${nombreMes}`, 14, y);
+    y += 5;
     autoTable(doc, {
-      startY: y + 8,
+      startY: y,
       head: [['Indicador', 'Valor']],
       body: resumen,
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 50 } },
     });
-    y = (doc as any).lastAutoTable.finalY;
+    y = (doc as any).lastAutoTable.finalY + 8;
 
-    // Sección 3a: Por profesional
+    // Sección 3a: Por profesional (mes)
+    doc.setFontSize(10);
+    doc.text(`Por profesional — ${nombreMes}`, 14, y);
+    y += 5;
     autoTable(doc, {
-      startY: y + 6,
-      head: [['Profesional', 'Total', 'Asiste', 'No Asiste', 'Confirmada', 'Pendiente']],
+      startY: y,
+      head: [['Profesional', 'Total', 'Asiste', 'No Asiste', 'Confirmada']],
       body: porProf,
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 }, 3: { cellWidth: 25 }, 4: { cellWidth: 25 } },
     });
-    y = (doc as any).lastAutoTable.finalY;
+    y = (doc as any).lastAutoTable.finalY + 8;
 
-    // Sección 3b: Por paciente
+    // Sección 3b: Por paciente (mes)
+    doc.setFontSize(10);
+    doc.text(`Por paciente — ${nombreMes}`, 14, y);
+    y += 5;
     autoTable(doc, {
-      startY: y + 6,
-      head: [['Paciente', 'Sesiones', 'Estados', 'Tokens']],
+      startY: y,
+      head: [['Paciente', 'Sesiones', 'Tokens']],
       body: porPac,
       styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 } },
     });
-    y = (doc as any).lastAutoTable.finalY;
+    y = (doc as any).lastAutoTable.finalY + 8;
 
     // Sección 3c: Alertas tokens bajos
     if (bajaTokens.length > 0) {
+      doc.setFontSize(10);
+      doc.text('Alertas: Tokens bajos (≤2)', 14, y);
+      y += 5;
       autoTable(doc, {
-        startY: y + 6,
-        head: [['Alerta: Tokens bajos (≤2)', 'Saldo']],
+        startY: y,
+        head: [['Paciente', 'Saldo']],
         body: bajaTokens,
         styles: { fontSize: 7, cellPadding: 2 },
         headStyles: { fillColor: [239, 68, 68], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 50 } },
       });
     }
 
@@ -353,14 +385,23 @@ export default function VistaDiaria() {
         </h2>
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-slate-400 hidden md:inline">
-            {format(fecha, "EEEE dd/MM/yyyy", { locale: es })}
+            {format(fecha, "EEEE", { locale: es })}
           </span>
+          <button onClick={() => avanzarDia(-1)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+            <ChevronLeft size={16} className="text-slate-400" />
+          </button>
           <input 
-            type="date" 
-            className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-bold text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
-            value={format(fecha, 'yyyy-MM-dd')}
-            onChange={(e) => setFecha(new Date(e.target.value + 'T12:00:00'))}
+            type="text"
+            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-200 outline-none focus:border-blue-500 text-center w-[100px]"
+            value={fechaTexto}
+            onChange={(e) => parsearFechaManual(e.target.value)}
+            onBlur={() => setFechaTexto(format(fecha, 'dd/MM/yyyy'))}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            placeholder="DD/MM/AAAA"
           />
+          <button onClick={() => avanzarDia(1)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+            <ChevronRight size={16} className="text-slate-400" />
+          </button>
           <button onClick={exportarPDF} disabled={isExporting} className="bg-red-600 hover:bg-red-500 disabled:bg-red-900/50 text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center" title="Exportar PDF">
             <FileText size={14} className="mr-1" /> PDF
           </button>
