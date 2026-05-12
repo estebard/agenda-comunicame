@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw, FileSpreadsheet, FileText } from 'lucide-react';
 import ModalGestionarBloque from './ModalGestionarBloque';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 const HORARIOS = ['09:05', '10:00', '11:00', '12:00', '13:00', '14:00', '14:50', '15:40', '16:30', '17:20'];
 
@@ -31,13 +35,30 @@ const getFondoColumna = (index: number) => {
 };
 
 export default function VistaDiaria() {
-  const [fecha, setFecha] = useState(new Date());
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [fecha, setFecha] = useState(() => {
+    const param = searchParams.get('fecha');
+    if (param) {
+      const d = new Date(param + 'T12:00:00');
+      return isNaN(d.getTime()) ? new Date() : d;
+    }
+    return new Date();
+  });
   const [profesionales, setProfesionales] = useState<any[]>([]);
   const [bloques, setBloques] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<any>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('fecha', format(fecha, 'yyyy-MM-dd'));
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [fecha]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -130,18 +151,90 @@ export default function VistaDiaria() {
     }
   };
 
+  const rowsParaReporte = () => {
+    const rows: any[] = [];
+    HORARIOS.forEach(hora => {
+      profesionales.forEach(p => {
+        const celdas = bloques.filter(b => b.profesionalId === p.id && b.horaRender === hora);
+        if (celdas.length === 0) return;
+        celdas.forEach(b => {
+          rows.push({
+            hora,
+            profesional: p.nombre,
+            especialidad: p.especialidad,
+            paciente: b.paciente?.nombre_completo || '—',
+            estado: b.estado,
+            observacion: b.observacion || '',
+            tokens: b.paciente?.tokens_disponibles ?? '—',
+            recuperacion: b.esRecuperacion ? 'Sí' : 'No',
+            agendaOficial: b.fechaOficial ? format(new Date(b.fechaOficial), 'dd/MM/yyyy HH:mm') : '—'
+          });
+        });
+      });
+    });
+    return rows;
+  };
+
+  const exportarPDF = () => {
+    setIsExporting(true);
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const titulo = `Informe de Asistencia — ${format(fecha, "dd/MM/yyyy", { locale: es })}`;
+    doc.setFontSize(14);
+    doc.text(titulo, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Centro Comunícame — ${format(fecha, "EEEE dd 'de' MMMM, yyyy", { locale: es })}`, 14, 22);
+
+    const rows = rowsParaReporte();
+    (doc as any).autoTable({
+      startY: 28,
+      head: [['Hora', 'Profesional', 'Especialidad', 'Paciente', 'Estado', 'Observación', 'Tokens', 'Recup.', 'Agenda Oficial']],
+      body: rows.map(r => [r.hora, r.profesional, r.especialidad, r.paciente, r.estado, r.observacion, String(r.tokens), r.recuperacion, r.agendaOficial]),
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [241, 245, 249] }
+    });
+    doc.save(`asistencia_${format(fecha, 'yyyy-MM-dd')}.pdf`);
+    setIsExporting(false);
+  };
+
+  const exportarExcel = () => {
+    setIsExporting(true);
+    const rows = rowsParaReporte();
+    const ws = XLSX.utils.json_to_sheet(rows, {
+      header: ['hora', 'profesional', 'especialidad', 'paciente', 'estado', 'observacion', 'tokens', 'recuperacion', 'agendaOficial']
+    });
+    ws['!cols'] = [
+      { wch: 8 }, { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 14 }, { wch: 35 }, { wch: 10 }, { wch: 8 }, { wch: 20 }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
+    XLSX.writeFile(wb, `asistencia_${format(fecha, 'yyyy-MM-dd')}.xlsx`);
+    setIsExporting(false);
+  };
+
   return (
     <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col h-[calc(100vh-2rem)]">
       <div className="bg-slate-950 p-5 flex justify-between items-center border-b border-slate-800">
         <h2 className="font-black text-slate-100 uppercase tracking-widest flex items-center text-lg">
           <CalendarDays className="mr-3 text-orange-400" size={24} /> Asistencia y Novedades Diarias
         </h2>
-        <input 
-          type="date" 
-          className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-bold text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
-          value={format(fecha, 'yyyy-MM-dd')}
-          onChange={(e) => setFecha(new Date(e.target.value + 'T12:00:00'))}
-        />
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-slate-400 hidden md:inline">
+            {format(fecha, "EEEE dd/MM/yyyy", { locale: es })}
+          </span>
+          <input 
+            type="date" 
+            className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm font-bold text-slate-200 outline-none focus:border-blue-500 cursor-pointer"
+            value={format(fecha, 'yyyy-MM-dd')}
+            onChange={(e) => setFecha(new Date(e.target.value + 'T12:00:00'))}
+          />
+          <button onClick={exportarPDF} disabled={isExporting} className="bg-red-600 hover:bg-red-500 disabled:bg-red-900/50 text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center" title="Exportar PDF">
+            <FileText size={14} className="mr-1" /> PDF
+          </button>
+          <button onClick={exportarExcel} disabled={isExporting} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900/50 text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors flex items-center" title="Exportar Excel">
+            <FileSpreadsheet size={14} className="mr-1" /> Excel
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-x-auto overflow-y-auto relative">

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import VistaDiaria from '@/components/VistaDiaria';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,9 @@ export default function AgendaPage() {
         <p className="text-sm text-slate-400 font-medium">Gestión de asistencia, bloqueos y observaciones clínicas</p>
       </header>
       
-      <VistaDiaria />
+      <Suspense fallback={<div className="h-40 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>}>
+        <VistaDiaria />
+      </Suspense>
     </main>
   );
 }

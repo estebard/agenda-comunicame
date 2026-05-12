@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { format, addDays, startOfWeek, subWeeks, addWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -23,7 +24,25 @@ const getFondoColumna = (index: number) => {
 };
 
 export default function PlanificacionMensualPage() {
-  const [fechaBase, setFechaBase] = useState(new Date());
+  return (
+    <Suspense fallback={<div className="h-40 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>}>
+      <PlanificacionInner />
+    </Suspense>
+  );
+}
+
+function PlanificacionInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [fechaBase, setFechaBase] = useState(() => {
+    const param = searchParams.get('semana');
+    if (param) {
+      const d = new Date(param + 'T12:00:00');
+      return isNaN(d.getTime()) ? new Date() : d;
+    }
+    return new Date();
+  });
   const [profesionales, setProfesionales] = useState<any[]>([]);
   const [profesionalSeleccionado, setProfesionalSeleccionado] = useState<string>('');
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -76,6 +95,12 @@ export default function PlanificacionMensualPage() {
   useEffect(() => {
     fetchCitasSemana();
   }, [fetchCitasSemana]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('semana', format(fechaBase, 'yyyy-MM-dd'));
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [fechaBase]);
 
   const inicioSemana = startOfWeek(fechaBase, { weekStartsOn: 1 });
   const diasRender = DIAS_SEMANA.map(offset => addDays(inicioSemana, offset - 1));
