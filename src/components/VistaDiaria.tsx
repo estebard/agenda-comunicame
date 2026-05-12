@@ -7,8 +7,8 @@ import { format, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw, FileSpreadsheet, FileText } from 'lucide-react';
 import ModalGestionarBloque from './ModalGestionarBloque';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const HORARIOS = ['09:05', '10:00', '11:00', '12:00', '13:00', '14:00', '14:50', '15:40', '16:30', '17:20'];
@@ -185,7 +185,7 @@ export default function VistaDiaria() {
     doc.text(`Centro Comunícame — ${format(fecha, "EEEE dd 'de' MMMM, yyyy", { locale: es })}`, 14, 22);
 
     const rows = rowsParaReporte();
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 28,
       head: [['Hora', 'Profesional', 'Especialidad', 'Paciente', 'Estado', 'Observación', 'Tokens', 'Recup.', 'Agenda Oficial']],
       body: rows.map(r => [r.hora, r.profesional, r.especialidad, r.paciente, r.estado, r.observacion, String(r.tokens), r.recuperacion, r.agendaOficial]),
