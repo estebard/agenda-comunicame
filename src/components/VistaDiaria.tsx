@@ -118,7 +118,18 @@ export default function VistaDiaria() {
         observacion: c.observacion
       }));
 
-    if (profs) setProfesionales(profs);
+    if (profs) {
+      const orden = ['Rosa', 'Valentina', 'Karina'];
+      profs.sort((a: any, b: any) => {
+        const ia = orden.findIndex((n: string) => (a.nombre || '').toLowerCase().startsWith(n.toLowerCase()));
+        const ib = orden.findIndex((n: string) => (b.nombre || '').toLowerCase().startsWith(n.toLowerCase()));
+        if (ia >= 0 && ib >= 0) return ia - ib;
+        if (ia >= 0) return -1;
+        if (ib >= 0) return 1;
+        return (a.nombre || '').localeCompare(b.nombre || '');
+      });
+      setProfesionales(profs);
+    }
     setBloques([...asistenciasMap, ...citasMap]);
     setIsLoading(false);
   };
@@ -163,10 +174,12 @@ export default function VistaDiaria() {
             profesional: p.nombre,
             especialidad: p.especialidad,
             paciente: b.paciente?.nombre_completo || '—',
+            edad: calcularEdad(b.paciente?.fecha_nacimiento || null),
             estado: b.estado,
             observacion: b.observacion || '',
             tokens: b.paciente?.tokens_disponibles ?? '—',
             recuperacion: b.esRecuperacion ? 'Sí' : 'No',
+            apoderado: b.paciente?.nombre_apoderado || '—',
             agendaOficial: b.fechaOficial ? format(new Date(b.fechaOficial), 'dd/MM/yyyy HH:mm') : '—'
           });
         });
@@ -175,24 +188,144 @@ export default function VistaDiaria() {
     return rows;
   };
 
+  const gridParaPDF = () => {
+    const head = ['Hora', ...profesionales.map((p: any) => p.nombre)];
+    const body = HORARIOS.filter(h => h !== '13:00').map(hora => {
+      const row: string[] = [hora];
+      profesionales.forEach((p: any) => {
+        const celdas = bloques.filter(b => b.profesionalId === p.id && b.horaRender === hora);
+        if (celdas.length === 0) { row.push('—'); return; }
+        row.push(celdas.map((b: any) => {
+          const partes = [
+            b.paciente?.nombre_completo || '?',
+            b.estado + (b.esRecuperacion ? ' (R)' : ''),
+          ];
+          if (b.observacion) partes.push('Obs: ' + b.observacion);
+          const tok = b.paciente?.tokens_disponibles;
+          if (tok !== null && tok !== undefined) partes.push('Tok: ' + tok);
+          if (b.paciente?.nombre_apoderado) partes.push('Ap: ' + b.paciente.nombre_apoderado);
+          return partes.join(' | ');
+        }).join(' ═══ '));
+      });
+      return row;
+    });
+    return { head, body };
+  };
+
+  const resumenParaPDF = () => {
+    const asiste = bloques.filter((b: any) => b.estado === 'ASISTE').length;
+    const noAsiste = bloques.filter((b: any) => b.estado === 'NO_ASISTE').length;
+    const confirmada = bloques.filter((b: any) => b.estado === 'CONFIRMADA').length;
+    const pendiente = bloques.filter((b: any) => b.estado === 'AGENDADA').length;
+    const total = bloques.length;
+    const recuperaciones = bloques.filter((b: any) => b.esRecuperacion).length;
+    const pacientesUnicos = new Set(bloques.map((b: any) => b.paciente?.nombre_completo).filter(Boolean)).size;
+    const pct = (n: number) => total > 0 ? ((n / total) * 100).toFixed(1) + '%' : '0%';
+
+    const resumen = [
+      ['Total sesiones', String(total)],
+      ['Asistencias (ASISTE)', `${asiste} (${pct(asiste)})`],
+      ['Inasistencias (NO_ASISTE)', `${noAsiste} (${pct(noAsiste)})`],
+      ['Confirmadas', `${confirmada} (${pct(confirmada)})`],
+      ['Pendientes (AGENDADA)', `${pendiente} (${pct(pendiente)})`],
+      ['Sesiones de recuperación', `${recuperaciones} (${pct(recuperaciones)})`],
+      ['Pacientes únicos', String(pacientesUnicos)],
+      ['Profesionales activos', String(profesionales.length)],
+    ];
+
+    // Por profesional
+    const porProf = profesionales.map((p: any) => {
+      const cells = bloques.filter((b: any) => b.profesionalId === p.id);
+      const a = cells.filter((b: any) => b.estado === 'ASISTE').length;
+      const na = cells.filter((b: any) => b.estado === 'NO_ASISTE').length;
+      const c = cells.filter((b: any) => b.estado === 'CONFIRMADA').length;
+      const ag = cells.filter((b: any) => b.estado === 'AGENDADA').length;
+      return [p.nombre, String(cells.length), String(a), String(na), String(c), String(ag)];
+    });
+
+    // Por paciente
+    const pacMap: Record<string, any> = {};
+    bloques.forEach((b: any) => {
+      const name = b.paciente?.nombre_completo || '?';
+      if (!pacMap[name]) pacMap[name] = { count: 0, estados: new Set(), tokens: b.paciente?.tokens_disponibles || 0 };
+      pacMap[name].count++;
+      pacMap[name].estados.add(b.estado);
+    });
+    const porPac = Object.entries(pacMap).map(([name, d]) => [
+      name, String(d.count), [...(d.estados as Set<string>)].join(', '), String(d.tokens)
+    ]);
+
+    // Alertas tokens bajos
+    const bajaTokens = Object.entries(pacMap)
+      .filter(([, d]) => (d.tokens as number) <= 2)
+      .map(([name, d]) => [name, String(d.tokens)]);
+
+    return { resumen, porProf, porPac, bajaTokens };
+  };
+
   const exportarPDF = () => {
     setIsExporting(true);
     const doc = new jsPDF({ orientation: 'landscape' });
-    const titulo = `Informe de Asistencia — ${format(fecha, "dd/MM/yyyy", { locale: es })}`;
+    const titulo = `Informe de Asistencia — ${format(fecha, "EEEE dd/MM/yyyy", { locale: es })}`;
     doc.setFontSize(14);
     doc.text(titulo, 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Centro Comunícame — ${format(fecha, "EEEE dd 'de' MMMM, yyyy", { locale: es })}`, 14, 22);
+    doc.setFontSize(9);
+    doc.text('Centro Comunícame', 14, 22);
 
-    const rows = rowsParaReporte();
+    // Sección 1: Grilla
+    const { head: gridHead, body: gridBody } = gridParaPDF();
     autoTable(doc, {
       startY: 28,
-      head: [['Hora', 'Profesional', 'Especialidad', 'Paciente', 'Estado', 'Observación', 'Tokens', 'Recup.', 'Agenda Oficial']],
-      body: rows.map(r => [r.hora, r.profesional, r.especialidad, r.paciente, r.estado, r.observacion, String(r.tokens), r.recuperacion, r.agendaOficial]),
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [241, 245, 249] }
+      head: [gridHead],
+      body: gridBody,
+      styles: { fontSize: 5, cellPadding: 1.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', halign: 'center' },
+      columnStyles: { 0: { cellWidth: 12, fontStyle: 'bold' } },
     });
+    let y = (doc as any).lastAutoTable.finalY;
+
+    // Sección 2: Resumen general
+    const { resumen, porProf, porPac, bajaTokens } = resumenParaPDF();
+    autoTable(doc, {
+      startY: y + 8,
+      head: [['Indicador', 'Valor']],
+      body: resumen,
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+
+    // Sección 3a: Por profesional
+    autoTable(doc, {
+      startY: y + 6,
+      head: [['Profesional', 'Total', 'Asiste', 'No Asiste', 'Confirmada', 'Pendiente']],
+      body: porProf,
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+
+    // Sección 3b: Por paciente
+    autoTable(doc, {
+      startY: y + 6,
+      head: [['Paciente', 'Sesiones', 'Estados', 'Tokens']],
+      body: porPac,
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [249, 115, 22], textColor: 255, fontStyle: 'bold' },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+
+    // Sección 3c: Alertas tokens bajos
+    if (bajaTokens.length > 0) {
+      autoTable(doc, {
+        startY: y + 6,
+        head: [['Alerta: Tokens bajos (≤2)', 'Saldo']],
+        body: bajaTokens,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [239, 68, 68], textColor: 255, fontStyle: 'bold' },
+      });
+    }
+
     doc.save(`asistencia_${format(fecha, 'yyyy-MM-dd')}.pdf`);
     setIsExporting(false);
   };

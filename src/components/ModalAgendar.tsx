@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { X, Save, Copy } from 'lucide-react';
-import { format, addWeeks } from 'date-fns';
+import { format, getDay, getDaysInMonth, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface ModalProps {
@@ -20,8 +20,25 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
   const [pacienteId, setPacienteId] = useState('');
   const [esRecuperacion, setEsRecuperacion] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [tokens, setTokens] = useState(0);
-  const [replicas, setReplicas] = useState(0);
+
+  const calcularReplicas = (): Date[] => {
+    if (esRecuperacion) return [];
+    const diaSemana = getDay(dia);
+    const inicioMes = startOfMonth(dia);
+    const diasEnMes = getDaysInMonth(dia);
+    const fechas: Date[] = [];
+    for (let d = 1; d <= diasEnMes; d++) {
+      const fecha = new Date(inicioMes);
+      fecha.setDate(d);
+      fecha.setHours(0, 0, 0, 0);
+      if (getDay(fecha) === diaSemana && fecha > dia) {
+        fechas.push(fecha);
+      }
+    }
+    return fechas;
+  };
+
+  const replicas = calcularReplicas();
 
   useEffect(() => {
     if (isOpen) {
@@ -32,19 +49,6 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
       fetchPacientes();
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (pacienteId && !esRecuperacion) {
-      supabase.from('paciente').select('tokens_disponibles').eq('id', pacienteId).single().then(({ data }) => {
-        const t = data?.tokens_disponibles || 0;
-        setTokens(t);
-        setReplicas(t > 1 ? t - 1 : 0);
-      });
-    } else {
-      setTokens(0);
-      setReplicas(0);
-    }
-  }, [pacienteId, esRecuperacion]);
 
   if (!isOpen) return null;
 
@@ -92,32 +96,25 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
       return;
     }
 
-    // Replicar citas para semanas siguientes según tokens
-    if (!esRecuperacion && replicas > 0) {
-      const inserts: any[] = [];
-      for (let i = 1; i <= replicas; i++) {
-        const semanaSiguiente = addWeeks(dia, i);
-        const inicioReplica = new Date(semanaSiguiente);
+    // Replicar citas hasta fin de mes (mismo día de semana)
+    if (!esRecuperacion && replicas.length > 0) {
+      const inserts: any[] = replicas.map(fechaReplica => {
+        const inicioReplica = new Date(fechaReplica);
         inicioReplica.setHours(h, m, 0, 0);
         const finReplica = new Date(inicioReplica);
         finReplica.setMinutes(finReplica.getMinutes() + 45);
-
-        inserts.push({
+        return {
           paciente_id: pacienteId,
           profesional_id: profesionalId,
           fecha_hora_inicio: inicioReplica.toISOString(),
           fecha_hora_fin: finReplica.toISOString(),
           es_recuperacion: false,
           estado: 'AGENDADA'
-        });
-      }
+        };
+      });
 
-      if (inserts.length > 0) {
-        const { error: errReplicas } = await supabase.from('cita').insert(inserts);
-        if (errReplicas) {
-          console.error('Error replicando citas:', errReplicas);
-        }
-      }
+      const { error: errReplicas } = await supabase.from('cita').insert(inserts);
+      if (errReplicas) console.error('Error replicando citas:', errReplicas);
     }
 
     onSuccess();
@@ -165,29 +162,27 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Marcar como Recuperación</span>
           </label>
 
-          {!esRecuperacion && tokens > 0 && replicas > 0 && (
+          {!esRecuperacion && replicas.length > 0 && (
             <div className="bg-blue-900/20 border border-blue-900/50 p-3 rounded-xl text-center">
               <div className="flex items-center justify-center gap-2 text-blue-400">
                 <Copy size={14} />
                 <span className="text-[10px] font-black uppercase tracking-widest">
-                  Se crearán {replicas} réplica{replicas > 1 ? 's' : ''} adicional{replicas > 1 ? 'es' : ''}
+                  Se replicará hasta fin de mes
                 </span>
               </div>
               <div className="text-xs font-bold text-slate-300 mt-1">
-                Total: {tokens} sesiones — cada {format(dia, 'EEEE', { locale: es })} a las {hora} hrs
+                {replicas.length} sesi{replicas.length > 1 ? 'ones' : 'ón'} adicional{replicas.length > 1 ? 'es' : ''}
               </div>
-              {replicas >= 1 && (
-                <div className="text-[9px] text-slate-500 mt-1">
-                  {format(addWeeks(dia, 1), "dd/MM")}, {format(addWeeks(dia, 2), "dd/MM")}{replicas >= 3 ? `, ${format(addWeeks(dia, 3), "dd/MM")}` : ''}
-                </div>
-              )}
+              <div className="text-[9px] text-slate-500 mt-1">
+                {format(dia, 'dd/MM')}{replicas.slice(0, 4).map((d: Date) => `, ${format(d, 'dd/MM')}`).join('')}{replicas.length > 4 ? '...' : ''}
+              </div>
             </div>
           )}
 
-          {!esRecuperacion && pacienteId && tokens <= 0 && (
-            <div className="bg-red-900/20 border border-red-900/50 p-3 rounded-xl text-center">
-              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">
-                El paciente no tiene tokens disponibles. Solo se creará esta cita.
+          {!esRecuperacion && pacienteId && replicas.length === 0 && (
+            <div className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-center">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                No hay más días {format(dia, 'EEEE', { locale: es })} en este mes
               </span>
             </div>
           )}
