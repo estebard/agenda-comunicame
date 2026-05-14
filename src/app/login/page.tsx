@@ -20,8 +20,8 @@ export default function LoginPage() {
     const { error: err } = await signIn(email, password);
     if (err) {
       setError(err);
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   return (

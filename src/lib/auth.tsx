@@ -78,9 +78,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    router.refresh();
+
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('rol')
+      .eq('user_id', data.user.id)
+      .maybeSingle();
+
+    await fetchRole(data.user.id);
+
+    if (roleData?.rol === 'profesional') {
+      router.push('/asistencia');
+    } else {
+      router.push('/');
+    }
     return { error: null };
   };
 
