@@ -21,6 +21,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { rol, user, signOut } = useAuth();
 
+  if (pathname === '/login') return null;
+
   const adminItems = [
     { name: 'Dashboard General', icon: LayoutDashboard, href: '/' },
     { name: 'Agenda Oficial (Semanal)', icon: CalendarDays, href: '/planificacion' },

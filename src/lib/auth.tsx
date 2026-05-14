@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const destino = roleData.rol === 'profesional' ? '/asistencia' : '/';
       console.log('[LOGIN] Redirigiendo a:', destino);
-      router.push(destino);
+      window.location.href = destino;
     } catch (err: any) {
       console.error('[LOGIN] Error inesperado:', err);
       router.push('/');

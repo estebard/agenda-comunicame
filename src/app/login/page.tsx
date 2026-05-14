@@ -41,7 +41,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-black text-slate-100 uppercase tracking-tighter">
             Centro Comunícame
           </h1>
-          <p className="text-sm text-slate-500 mt-1 font-medium">Ingresá al sistema</p>
+          <p className="text-sm text-slate-500 mt-1 font-medium">Inicie sesión en el sistema</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl">
