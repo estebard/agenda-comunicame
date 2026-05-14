@@ -81,17 +81,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
 
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('rol')
-      .eq('user_id', data.user.id)
-      .maybeSingle();
+    try {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('rol')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
 
-    await fetchRole(data.user.id);
+      await fetchRole(data.user.id);
 
-    if (roleData?.rol === 'profesional') {
-      router.push('/asistencia');
-    } else {
+      if (roleData?.rol === 'profesional') {
+        router.push('/asistencia');
+      } else {
+        router.push('/');
+      }
+    } catch (_err) {
       router.push('/');
     }
     return { error: null };

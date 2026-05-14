@@ -17,9 +17,13 @@ export default function LoginPage() {
     setError('');
     setSubmitting(true);
 
-    const { error: err } = await signIn(email, password);
-    if (err) {
-      setError(err);
+    try {
+      const { error: err } = await signIn(email, password);
+      if (err) {
+        setError(err);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error inesperado');
     }
     setSubmitting(false);
   };
