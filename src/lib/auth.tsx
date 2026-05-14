@@ -78,29 +78,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    console.log('[LOGIN] Iniciando signIn para:', email);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log('[LOGIN] signInWithPassword:', error ? 'ERROR: ' + error.message : 'OK', '| user.id:', data?.user?.id);
     if (error) return { error: error.message };
+    if (!data?.user) return { error: 'No se recibió sesión del servidor.' };
 
     try {
-      const { data: roleData } = await supabase
+      const userId = data.user.id;
+      console.log('[LOGIN] Consultando user_roles para:', userId);
+      const { data: roleData, error: roleErr } = await supabase
         .from('user_roles')
         .select('rol')
-        .eq('user_id', data.user.id)
+        .eq('user_id', userId)
         .maybeSingle();
+      console.log('[LOGIN] user_roles respuesta:', roleData, roleErr ? 'ERROR: ' + roleErr.message : 'OK');
 
       if (!roleData) {
+        console.log('[LOGIN] Sin rol -> cerrando sesión');
         await supabase.auth.signOut();
         return { error: 'Tu cuenta no tiene permisos asignados. Contacta al administrador.' };
       }
 
-      await fetchRole(data.user.id);
+      console.log('[LOGIN] Rol encontrado:', roleData.rol);
+      await fetchRole(userId);
 
-      if (roleData.rol === 'profesional') {
-        router.push('/asistencia');
-      } else {
-        router.push('/');
-      }
-    } catch (_err) {
+      const destino = roleData.rol === 'profesional' ? '/asistencia' : '/';
+      console.log('[LOGIN] Redirigiendo a:', destino);
+      router.push(destino);
+    } catch (err: any) {
+      console.error('[LOGIN] Error inesperado:', err);
       router.push('/');
     }
     return { error: null };

@@ -14,15 +14,18 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[LOGIN] Form enviado, email:', email);
     setError('');
     setSubmitting(true);
 
     try {
       const { error: err } = await signIn(email, password);
+      console.log('[LOGIN] signIn result:', err || 'OK - redirigiendo...');
       if (err) {
         setError(err);
       }
     } catch (err: any) {
+      console.error('[LOGIN] Error capturado:', err);
       setError(err.message || 'Error inesperado');
     }
     setSubmitting(false);
