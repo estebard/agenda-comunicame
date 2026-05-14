@@ -7,6 +7,7 @@ import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns
 import { es } from 'date-fns/locale';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Lock, CalendarDays, RefreshCw, FileSpreadsheet, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import ModalGestionarBloque from './ModalGestionarBloque';
+import { useAuth } from '@/lib/auth';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -55,6 +56,7 @@ export default function VistaDiaria() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<any>(null);
+  const { rol, profesionalId } = useAuth();
 
   useEffect(() => {
     setFechaTexto(format(fecha, 'dd/MM/yyyy'));
@@ -132,8 +134,14 @@ export default function VistaDiaria() {
       }));
 
     if (profs) {
+      // Filtrar por profesional si rol=profesional
+      let filtered = profs;
+      if (rol === 'profesional' && profesionalId) {
+        filtered = profs.filter((p: any) => p.id === profesionalId);
+      }
+
       const orden = ['Rosa', 'Valentina', 'Karina'];
-      profs.sort((a: any, b: any) => {
+      filtered.sort((a: any, b: any) => {
         const ia = orden.findIndex((n: string) => (a.nombre || '').toLowerCase().startsWith(n.toLowerCase()));
         const ib = orden.findIndex((n: string) => (b.nombre || '').toLowerCase().startsWith(n.toLowerCase()));
         if (ia >= 0 && ib >= 0) return ia - ib;
@@ -141,7 +149,7 @@ export default function VistaDiaria() {
         if (ib >= 0) return 1;
         return (a.nombre || '').localeCompare(b.nombre || '');
       });
-      setProfesionales(profs);
+      setProfesionales(filtered);
     }
     setBloques([...asistenciasMap, ...citasMap]);
     setIsLoading(false);

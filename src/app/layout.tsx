@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import { AuthProvider } from "@/lib/auth";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -19,13 +20,12 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 text-slate-100 flex min-h-screen`}>
-        {/* Inyectamos el menú lateral */}
-        <Sidebar />
-        
-        {/* Contenedor principal para el contenido de las páginas */}
-        <div className="flex-1 overflow-x-hidden">
-          {children}
-        </div>
+        <AuthProvider>
+          <Sidebar />
+          <div className="flex-1 overflow-x-hidden">
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

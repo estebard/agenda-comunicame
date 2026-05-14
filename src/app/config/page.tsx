@@ -2,15 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { UserPlus, Search, Trash2, GraduationCap, Baby } from 'lucide-react';
+import { UserPlus, Search, Trash2, GraduationCap, Baby, UserCheck, Mail } from 'lucide-react';
 
 export default function ConfigPage() {
-  const [activeTab, setActiveTab] = useState<'profs' | 'pacientes'>('profs');
+  const [activeTab, setActiveTab] = useState<'profs' | 'pacientes' | 'cuentas'>('profs');
   const [profs, setProfs] = useState<any[]>([]);
   const [pacientes, setPacientes] = useState<any[]>([]);
+  const [cuentas, setCuentas] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [newProf, setNewProf] = useState({ nombre: '', especialidad: 'TO' });
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserProfId, setNewUserProfId] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -20,9 +25,12 @@ export default function ConfigPage() {
     if (activeTab === 'profs') {
       const { data } = await supabase.from('profesional').select('*').order('nombre');
       if (data) setProfs(data);
-    } else {
+    } else if (activeTab === 'pacientes') {
       const { data } = await supabase.from('paciente').select('*').order('nombre_completo');
       if (data) setPacientes(data);
+    } else {
+      const { data } = await supabase.from('user_roles').select('user_id, rol, profesional:profesional_id(nombre)').order('rol');
+      if (data) setCuentas(data);
     }
   }
 
@@ -59,12 +67,57 @@ export default function ConfigPage() {
     fetchData();
   }
 
+  async function handleCreateUser() {
+    if (!newUserEmail || !newUserPassword) {
+      alert('Email y contraseña son obligatorios.');
+      return;
+    }
+    setIsCreatingUser(true);
+    try {
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+        email: newUserEmail,
+        password: newUserPassword,
+      });
+      if (signUpErr) throw signUpErr;
+
+      const userId = signUpData?.user?.id;
+      if (userId) {
+        const { error: roleErr } = await supabase.from('user_roles').insert({
+          user_id: userId,
+          rol: 'profesional',
+          profesional_id: newUserProfId || null,
+        });
+        if (roleErr) throw roleErr;
+      }
+
+      alert('Cuenta creada. El profesional recibirá un email de confirmación.');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserProfId('');
+      fetchData();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setIsCreatingUser(false);
+    }
+  }
+
+  async function handleDeleteCuenta(userId: string) {
+    if (!confirm('¿Eliminar esta cuenta? Perderá el acceso al sistema.')) return;
+    try {
+      await supabase.from('user_roles').delete().eq('user_id', userId);
+      fetchData();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  }
+
   return (
     <main className="p-8 max-w-6xl mx-auto text-slate-100">
       <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <h1 className="text-4xl font-black text-blue-400 uppercase tracking-tighter">Panel de Maestros</h1>
-          <p className="text-slate-400 font-medium">Configuración de {activeTab === 'profs' ? 'Terapeutas' : 'Nómina de Niños'}</p>
+          <p className="text-slate-400 font-medium">Configuración de {activeTab === 'profs' ? 'Terapeutas' : activeTab === 'pacientes' ? 'Nómina de Niños' : 'Cuentas de Usuario'}</p>
         </div>
         <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 shadow-inner">
           <button 
@@ -75,6 +128,10 @@ export default function ConfigPage() {
             onClick={() => setActiveTab('pacientes')}
             className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${activeTab === 'pacientes' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
           >Pacientes</button>
+          <button 
+            onClick={() => setActiveTab('cuentas')}
+            className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${activeTab === 'cuentas' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+          >Cuentas</button>
         </div>
       </header>
 
@@ -174,6 +231,83 @@ export default function ConfigPage() {
                     </td>
                     <td className="p-5 text-center">
                       <button onClick={() => handleDeletePaciente(p.id, p.nombre_completo)} className="text-slate-600 hover:text-red-400 p-2 transition-colors">
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'cuentas' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
+            <h3 className="flex items-center text-sm font-black mb-6 text-blue-400 uppercase tracking-widest">
+              <UserCheck className="mr-2" size={18} /> Crear Cuenta de Profesional
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <input 
+                type="email" 
+                placeholder="Email del profesional"
+                className="bg-slate-950 border-slate-800 rounded-xl p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newUserEmail}
+                onChange={e => setNewUserEmail(e.target.value)}
+              />
+              <input 
+                type="password" 
+                placeholder="Contraseña temporal"
+                className="bg-slate-950 border-slate-800 rounded-xl p-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={newUserPassword}
+                onChange={e => setNewUserPassword(e.target.value)}
+              />
+              <select 
+                className="bg-slate-950 border-slate-800 rounded-xl p-4 text-sm font-bold outline-none"
+                value={newUserProfId}
+                onChange={e => setNewUserProfId(e.target.value)}
+              >
+                <option value="">Sin vincular a profesional</option>
+                {profs.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre} ({p.especialidad})</option>
+                ))}
+              </select>
+              <button 
+                onClick={handleCreateUser}
+                disabled={isCreatingUser}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900/50 text-white font-black rounded-xl uppercase text-xs tracking-widest shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Mail size={16} />
+                {isCreatingUser ? 'Creando...' : 'Crear Cuenta'}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-950">
+                  <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Usuario</th>
+                  <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Rol</th>
+                  <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Profesional</th>
+                  <th className="p-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {cuentas.map(c => (
+                  <tr key={c.user_id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="p-5 text-xs font-bold text-slate-200 font-mono">{c.user_id.slice(0, 12)}...</td>
+                    <td className="p-5">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase ${
+                        c.rol === 'admin' ? 'bg-blue-900/30 text-blue-400 border-blue-800/50' : 'bg-emerald-900/30 text-emerald-400 border-emerald-800/50'
+                      }`}>
+                        {c.rol}
+                      </span>
+                    </td>
+                    <td className="p-5 text-sm font-bold text-slate-300">{c.profesional?.nombre || '—'}</td>
+                    <td className="p-5 text-center">
+                      <button onClick={() => handleDeleteCuenta(c.user_id)} className="text-slate-600 hover:text-red-400 p-2 transition-colors">
                         <Trash2 size={18} />
                       </button>
                     </td>

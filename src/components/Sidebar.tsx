@@ -11,14 +11,17 @@ import {
   PackageSearch, 
   Settings,
   LogOut,
-  Users 
+  Users,
+  Shield
 } from 'lucide-react';
 import ThemeSelector from './ThemeSelector';
+import { useAuth } from '@/lib/auth';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { rol, user, signOut } = useAuth();
 
-  const menuItems = [
+  const adminItems = [
     { name: 'Dashboard General', icon: LayoutDashboard, href: '/' },
     { name: 'Agenda Oficial (Semanal)', icon: CalendarDays, href: '/planificacion' },
     { name: 'Asistencia Diaria', icon: CalendarClock, href: '/asistencia' },
@@ -28,6 +31,12 @@ export default function Sidebar() {
     { name: 'Inventario', icon: PackageSearch, href: '/inventario' },
     { name: 'Configuración', icon: Settings, href: '/config' },
   ];
+
+  const profItems = [
+    { name: 'Mi Agenda Diaria', icon: CalendarClock, href: '/asistencia' },
+  ];
+
+  const menuItems = rol === 'profesional' ? profItems : adminItems;
 
   return (
     <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-screen sticky top-0 transition-colors duration-300">
@@ -40,7 +49,7 @@ export default function Sidebar() {
 
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 mt-2 px-2">
-          Módulos Operativos
+          {rol === 'profesional' ? 'Mi Panel' : 'Módulos Operativos'}
         </div>
         {menuItems.map((item) => {
           const isActive = pathname === item.href;
@@ -62,8 +71,17 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-slate-800 space-y-3">
+        {user && (
+          <div className="flex items-center gap-2 px-2 py-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest truncate">
+            <Shield size={12} className={rol === 'admin' ? 'text-blue-400' : 'text-emerald-400'} />
+            <span>{rol === 'admin' ? 'Administrador' : 'Profesional'}</span>
+          </div>
+        )}
         <ThemeSelector />
-        <button className="flex items-center space-x-3 px-4 py-2 w-full text-slate-500 hover:text-red-500 transition-colors font-bold text-sm">
+        <button 
+          onClick={signOut}
+          className="flex items-center space-x-3 px-4 py-2 w-full text-slate-500 hover:text-red-500 transition-colors font-bold text-sm"
+        >
           <LogOut size={18} />
           <span>Cerrar Sesión</span>
         </button>
