@@ -88,9 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', data.user.id)
         .maybeSingle();
 
+      if (!roleData) {
+        await supabase.auth.signOut();
+        return { error: 'Tu cuenta no tiene permisos asignados. Contacta al administrador.' };
+      }
+
       await fetchRole(data.user.id);
 
-      if (roleData?.rol === 'profesional') {
+      if (roleData.rol === 'profesional') {
         router.push('/asistencia');
       } else {
         router.push('/');
