@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from './supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
 
@@ -36,6 +36,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profesionalId, setProfesionalId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Guard de autenticación client-side
+  useEffect(() => {
+    if (loading) return;
+    if (!user && pathname !== '/login') {
+      router.push('/login');
+    }
+    if (user && pathname === '/login') {
+      router.push('/');
+    }
+  }, [user, loading, pathname]);
 
   const fetchRole = async (userId: string) => {
     const { data } = await supabase
@@ -105,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const destino = roleData.rol === 'profesional' ? '/asistencia' : '/';
       console.log('[LOGIN] Redirigiendo a:', destino);
-      window.location.href = destino;
+      router.push(destino);
     } catch (err: any) {
       console.error('[LOGIN] Error inesperado:', err);
       router.push('/');
