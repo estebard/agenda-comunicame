@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { Search, Save, X, Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalProps {
@@ -88,14 +88,10 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setSearchTerm(nombreCompleto); // Bloquea visualmente el input con el nombre
     setPacientesResult([]); // Cierra el menú desplegable
 
-    const inicioDia = startOfDay(dia).toISOString();
-    const finDia = endOfDay(dia).toISOString();
     const { data } = await supabase.from('cita')
       .select('id, fecha_hora_inicio, profesional:profesional_id(nombre)')
       .eq('paciente_id', id)
       .in('estado', ['AGENDADA', 'CONFIRMADA'])
-      .gte('fecha_hora_inicio', inicioDia)
-      .lte('fecha_hora_inicio', finDia)
       .order('fecha_hora_inicio', { ascending: false })
       .limit(15);
     setCitasDisponibles(data || []);
