@@ -204,12 +204,53 @@ export default function HistorialPacientesPage() {
       };
 
       if (editingPaciente) {
+        // Validar que no exista otro con el mismo nombre al editar
+        const { data: duplicadoEdit } = await supabase
+          .from('paciente')
+          .select('id, nombre_completo')
+          .ilike('nombre_completo', formNombre.trim())
+          .neq('id', editingPaciente.paciente_id)
+          .eq('activo', true)
+          .maybeSingle();
+
+        if (duplicadoEdit) {
+          alert(`Ya existe un paciente activo con el nombre "${duplicadoEdit.nombre_completo}".`);
+          setIsProcessingPaciente(false);
+          return;
+        }
+
         const { error } = await supabase
           .from('paciente')
           .update(payload)
           .eq('id', editingPaciente.paciente_id);
         if (error) throw error;
       } else {
+        // Validar que no exista otro con el mismo nombre al crear
+        const { data: duplicadoNew } = await supabase
+          .from('paciente')
+          .select('id, nombre_completo, activo')
+          .ilike('nombre_completo', formNombre.trim())
+          .maybeSingle();
+
+        if (duplicadoNew) {
+          if (duplicadoNew.activo) {
+            alert(`Ya existe un paciente activo con el nombre "${duplicadoNew.nombre_completo}".`);
+          } else {
+            if (!confirm(`"${duplicadoNew.nombre_completo}" ya existe pero está inactivo. ¿Reactivarlo?`)) {
+              setIsProcessingPaciente(false);
+              return;
+            }
+            await supabase.from('paciente').update({ activo: true, nombre_apoderado: formApoderado.trim(), fecha_nacimiento: formFechaNacimiento || null }).eq('id', duplicadoNew.id);
+            await fetchPacientes();
+            setShowPacienteForm(false);
+            resetPacienteForm();
+            setIsProcessingPaciente(false);
+            return;
+          }
+          setIsProcessingPaciente(false);
+          return;
+        }
+
         payload.fecha_ingreso = new Date().toISOString().split('T')[0];
         const { error } = await supabase
           .from('paciente')
