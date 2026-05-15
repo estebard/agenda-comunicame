@@ -255,7 +255,7 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
                   <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200" value={citaSeleccionadaId} onChange={(e) => setCitaSeleccionadaId(e.target.value)}>
                     <option value="">-- Seleccione Agenda Oficial --</option>
                     {citasDisponibles.map(c => (
-                      <option key={c.id} value={c.id}>{format(new Date(c.fecha_hora_inicio), 'dd/MM HH:mm')} - {c.profesional?.nombre}</option>
+                      <option key={c.id} value={c.id}>{format(new Date(c.fecha_hora_inicio), 'dd/MM/yyyy HH:mm')} - {c.profesional?.nombre}</option>
                     ))}
                   </select>
                 </div>
