@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { format } from 'date-fns';
-import { Search, Save, X, Trash2 } from 'lucide-react';
+import { format, startOfDay, endOfDay } from 'date-fns';
+import { Search, Save, X, Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
   const [profesionalId, setProfesionalId] = useState('');
   const [estado, setEstado] = useState('ASISTE');
   const [observacion, setObservacion] = useState('');
+  const [esRecuperacion, setEsRecuperacion] = useState(false);
 
   // 1. Inicialización Segura (Null-Safety)
   useEffect(() => {
@@ -40,8 +41,10 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
 
       if (bloqueExistente) {
         setProfesionalId(bloqueExistente.profesionalId || idProfesionalSeguro);
-        setEstado(bloqueExistente.estado || 'ASISTE');
+        // Si el estado es AGENDADA (cita sin asistencia), pre-seleccionar ASISTE
+        setEstado(bloqueExistente.estado === 'AGENDADA' ? 'ASISTE' : (bloqueExistente.estado || 'ASISTE'));
         setObservacion(bloqueExistente.observacion || '');
+        setEsRecuperacion(bloqueExistente.esRecuperacion || false);
         setCitaSeleccionadaId(bloqueExistente.citaOficialId || '');
       } else {
         setSearchTerm('');
@@ -52,6 +55,7 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
         setProfesionalId(idProfesionalSeguro);
         setEstado('ASISTE');
         setObservacion('');
+        setEsRecuperacion(false);
       }
     }
   }, [isOpen, bloqueExistente, profesionalGrid]);
@@ -84,10 +88,14 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setSearchTerm(nombreCompleto); // Bloquea visualmente el input con el nombre
     setPacientesResult([]); // Cierra el menú desplegable
 
+    const inicioDia = startOfDay(dia).toISOString();
+    const finDia = endOfDay(dia).toISOString();
     const { data } = await supabase.from('cita')
       .select('id, fecha_hora_inicio, profesional:profesional_id(nombre)')
       .eq('paciente_id', id)
       .in('estado', ['AGENDADA', 'CONFIRMADA'])
+      .gte('fecha_hora_inicio', inicioDia)
+      .lte('fecha_hora_inicio', finDia)
       .order('fecha_hora_inicio', { ascending: false })
       .limit(15);
     setCitasDisponibles(data || []);
@@ -145,9 +153,32 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
       }
 
       const { error: errCita } = await supabase.from('cita')
-        .update({ observacion })
+        .update({ observacion, estado, es_recuperacion: esRecuperacion })
         .eq('id', targetCitaId);
       if (errCita) throw new Error(`Error sincronizando cita maestra: ${errCita.message}`);
+
+      // Si es recuperación, crear réplica en la agenda oficial
+      if (esRecuperacion) {
+        const { data: citaRef } = await supabase.from('cita')
+          .select('paciente_id').eq('id', targetCitaId).single();
+        if (citaRef?.paciente_id) {
+          const inicioReplica = new Date(dia);
+          const [h2, m2] = hora.split(':').map(Number);
+          inicioReplica.setHours(h2, m2, 0, 0);
+          const finReplica = new Date(inicioReplica);
+          finReplica.setMinutes(finReplica.getMinutes() + 45);
+
+          await supabase.from('cita').insert({
+            paciente_id: citaRef.paciente_id,
+            profesional_id: profesionalId || bloqueExistente?.profesionalId,
+            fecha_hora_inicio: inicioReplica.toISOString(),
+            fecha_hora_fin: finReplica.toISOString(),
+            es_recuperacion: true,
+            estado: 'AGENDADA',
+            observacion: 'Recuperación registrada desde asistencia diaria'
+          });
+        }
+      }
 
       onSuccess();
       onClose();
@@ -212,22 +243,16 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
                     </button>
                   )}
                 </div>
-
                 {pacientesResult.length > 0 && !pacienteId && (
                   <div className="absolute w-full mt-1 max-h-40 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
                     {pacientesResult.map(p => (
-                      <div 
-                        key={p.id} 
-                        onClick={() => seleccionarPaciente(p.id, p.nombre_completo)} 
-                        className="p-3 hover:bg-slate-700 cursor-pointer text-sm text-slate-200 border-b border-slate-700/50 last:border-0 transition-colors"
-                      >
+                      <div key={p.id} onClick={() => seleccionarPaciente(p.id, p.nombre_completo)} className="p-3 hover:bg-slate-700 cursor-pointer text-sm text-slate-200 border-b border-slate-700/50 last:border-0 transition-colors">
                         {p.nombre_completo}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
               {pacienteId && citasDisponibles.length > 0 && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Ficha Oficial a Referenciar</label>
@@ -242,10 +267,19 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
             </div>
           )}
 
+          <label className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-700 rounded-xl cursor-pointer hover:border-purple-500/50 transition-colors">
+            <input type="checkbox" checked={esRecuperacion} onChange={(e) => setEsRecuperacion(e.target.checked)}
+              className="w-4 h-4 accent-purple-500" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <RefreshCw size={12} /> Sesión de recuperación (replica en agenda oficial)
+            </span>
+          </label>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Estado de Ejecución</label>
               <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-slate-200" value={estado} onChange={(e) => setEstado(e.target.value)}>
+                <option value="AGENDADA">Agendada</option>
                 <option value="ASISTE">Asiste</option>
                 <option value="NO_ASISTE">No Asiste</option>
                 <option value="CONFIRMADA">Confirmada</option>

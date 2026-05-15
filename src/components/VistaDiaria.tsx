@@ -473,7 +473,7 @@ export default function VistaDiaria() {
                                 <div className="flex gap-1 flex-wrap mb-1.5">
                                   {b.fechaOficial && (
                                     <div className="bg-amber-950/40 text-amber-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-amber-500/30 inline-block">
-                                      Agenda: {format(new Date(b.fechaOficial), "dd MMM HH:mm", { locale: es })} hrs
+                                       Agenda: {format(new Date(b.fechaOficial), "dd/MM/yyyy HH:mm", { locale: es })} hrs
                                     </div>
                                   )}
 
