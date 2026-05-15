@@ -76,7 +76,7 @@ export default function VistaDiaria() {
     const { data: asistencias, error: errAsistencias } = await supabase
       .from('asistencia')
       .select(`
-        id, fecha_hora_ejecucion, estado, observacion, profesional_id,
+        id, fecha_hora_ejecucion, estado, observacion, profesional_id, cita_oficial_id,
         cita:cita_oficial_id (id, fecha_hora_inicio, es_recuperacion, paciente:paciente_id(id, nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles))
       `)
       .gte('fecha_hora_ejecucion', inicioStr)
@@ -103,7 +103,7 @@ export default function VistaDiaria() {
     setMonthlyData(asistenciasMes || []);
 
     // 4. Consolidación de Entidades (Deduplicación por Integridad Referencial)
-    const citasConAsistencia = new Set(asistencias?.map((a: any) => a.cita?.id).filter(Boolean));
+    const citasConAsistencia = new Set(asistencias?.map((a: any) => a.cita_oficial_id).filter(Boolean));
 
     const asistenciasMap = (asistencias || []).map((a: any) => ({
       isEjecucion: true,
