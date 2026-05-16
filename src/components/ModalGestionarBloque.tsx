@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Search, Save, X, Trash2, RefreshCw } from 'lucide-react';
 
 interface ModalProps {
@@ -212,7 +213,9 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
         <div className="p-6 space-y-5 overflow-y-auto">
           <div className="bg-blue-900/20 border border-blue-900/50 p-3 rounded-xl text-center">
             <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Ejecución Operativa</div>
-            <div className="text-lg font-black text-slate-200 mt-1">{hora} hrs</div>
+            <div className="text-lg font-black text-slate-200 mt-1">
+              {format(dia, "EEEE dd/MM", { locale: es })} — {hora} hrs
+            </div>
           </div>
 
           {!bloqueExistente && (

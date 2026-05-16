@@ -129,6 +129,8 @@ function PlanificacionInner() {
   const getEstilosEstado = (estado: string) => {
     switch (estado) {
       case 'CONFIRMADA': return 'border-l-4 border-blue-500 bg-blue-900/60 text-blue-100 hover:bg-blue-800/80';
+      case 'ASISTE': return 'border-l-4 border-emerald-500 bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/80';
+      case 'NO_ASISTE': return 'border-l-4 border-red-500 bg-red-900/60 text-red-100 hover:bg-red-800/80';
       case 'AGENDADA': return 'border-l-4 border-amber-500 bg-amber-900/40 text-amber-100 hover:bg-amber-800/60';
       default: return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-100 hover:bg-slate-700/80';
     }
@@ -262,6 +264,11 @@ function PlanificacionInner() {
                                   {cita.estado}
                                 </span>
                               </div>
+                              {cita.es_recuperacion && (
+                                <div className="mt-1.5 bg-purple-900/30 text-purple-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded border border-purple-500/30 text-center">
+                                  Recuperación
+                                </div>
+                              )}
                             </div>
                           ))}
 

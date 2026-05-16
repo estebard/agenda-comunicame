@@ -144,6 +144,8 @@ export default function ModalDetalleCita({ isOpen, onClose, cita, onSuccess }: M
             <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-slate-200" value={estado} onChange={(e) => setEstado(e.target.value)}>
               <option value="AGENDADA">Agendada</option>
               <option value="CONFIRMADA">Confirmada</option>
+              <option value="ASISTE">Asiste</option>
+              <option value="NO_ASISTE">No Asiste</option>
               <option value="CANCELADA">Cancelada</option>
             </select>
           </div>
