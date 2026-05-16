@@ -145,15 +145,18 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
         const [h, m] = hora.split(':').map(Number);
         inicioEjecucion.setHours(h, m, 0, 0);
 
+        let citaRef: any = null;
+
         // Si es recuperación: crear réplica en agenda y referenciarla directamente
         if (esRecuperacion) {
-          const { data: citaRef } = await supabase.from('cita')
-            .select('paciente_id').eq('id', targetCitaId).single();
-          if (citaRef?.paciente_id) {
+          const { data: refData } = await supabase.from('cita')
+            .select('paciente_id, fecha_hora_inicio').eq('id', targetCitaId).single();
+          citaRef = refData;
+          if (refData?.paciente_id) {
             const finReplica = new Date(inicioEjecucion);
             finReplica.setMinutes(finReplica.getMinutes() + 45);
             const { data: newCita } = await supabase.from('cita').insert({
-              paciente_id: citaRef.paciente_id,
+              paciente_id: refData.paciente_id,
               profesional_id: profesionalId,
               fecha_hora_inicio: inicioEjecucion.toISOString(),
               fecha_hora_fin: finReplica.toISOString(),
@@ -167,17 +170,22 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
             const nombreProf = profesionalesTotales.find((p: any) => p.id === profesionalId)?.nombre || '';
             await supabase.from('cita').update({
               estado,
-              observacion: 'Se adelanta al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' con ' + nombreProf
+              observacion: 'Se adelanta al ' + format(dia, 'dd/MM', { locale: es }) + ' ' + hora + ' con ' + nombreProf
             }).eq('id', targetCitaId);
           }
         }
+
+        const origenObs = citaRef?.fecha_hora_inicio 
+          ? 'Adelantada del ' + format(new Date(citaRef.fecha_hora_inicio), 'dd/MM HH:mm', { locale: es }) 
+          : '';
+        const asistenciaObs = origenObs ? (observacion ? origenObs + ' | ' + observacion : origenObs) : observacion;
 
         const { error: errAsistencia } = await supabase.from('asistencia').insert([{
           cita_oficial_id: finalTargetCitaId,
           profesional_id: profesionalId,
           fecha_hora_ejecucion: inicioEjecucion.toISOString(),
           estado,
-          observacion
+          observacion: asistenciaObs
         }]);
         if (errAsistencia) throw errAsistencia;
 

@@ -269,7 +269,12 @@ function PlanificacionInner() {
                                   Recuperación
                                 </div>
                               )}
-                              {cita.observacion && (
+                              {cita.observacion && cita.observacion.includes('Se adelanta al') && (
+                                <div className="mt-1.5 bg-amber-900/30 text-amber-400 text-[7px] font-black uppercase px-1.5 py-0.5 rounded border border-amber-500/30 text-center">
+                                  {cita.observacion}
+                                </div>
+                              )}
+                              {cita.observacion && !cita.observacion.includes('Se adelanta al') && (
                                 <div className="mt-1.5 text-[8px] text-slate-400 italic leading-tight line-clamp-2">
                                   {cita.observacion}
                                 </div>
