@@ -167,7 +167,7 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
             const nombreProf = profesionalesTotales.find((p: any) => p.id === profesionalId)?.nombre || '';
             await supabase.from('cita').update({
               estado,
-              observacion: 'Adelantada al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' — ' + nombreProf
+              observacion: 'Se adelanta al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' con ' + nombreProf
             }).eq('id', targetCitaId);
           }
         }

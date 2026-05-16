@@ -66,12 +66,13 @@ export default function ModalAgendar({ isOpen, onClose, dia, hora, profesionalId
     const fin = new Date(inicio);
     fin.setMinutes(fin.getMinutes() + 45);
 
-    // Validar duplicados en el mismo slot
+    // Validar duplicados en el mismo slot (±5 min de margen)
     const { data: duplicados } = await supabase
       .from('cita')
       .select('id, paciente:nombre_completo')
       .eq('profesional_id', profesionalId)
-      .eq('fecha_hora_inicio', inicio.toISOString())
+      .gte('fecha_hora_inicio', new Date(inicio.getTime() - 300000).toISOString())
+      .lte('fecha_hora_inicio', new Date(inicio.getTime() + 300000).toISOString())
       .neq('estado', 'CANCELADA');
 
     if (duplicados && duplicados.length > 0) {
