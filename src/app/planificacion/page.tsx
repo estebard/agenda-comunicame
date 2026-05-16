@@ -269,6 +269,11 @@ function PlanificacionInner() {
                                   Recuperación
                                 </div>
                               )}
+                              {cita.observacion && (
+                                <div className="mt-1.5 text-[8px] text-slate-400 italic leading-tight line-clamp-2">
+                                  {cita.observacion}
+                                </div>
+                              )}
                             </div>
                           ))}
 

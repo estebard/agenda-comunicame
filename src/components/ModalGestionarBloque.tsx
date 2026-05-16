@@ -112,7 +112,9 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setIsSaving(true);
 
     try {
-      // Validar que la cita no tenga ya una asistencia registrada (evitar duplicados)
+      let finalTargetCitaId = targetCitaId;
+
+      // Validar duplicados
       if (!bloqueExistente?.isEjecucion && targetCitaId) {
         const { data: existente } = await supabase
           .from('asistencia')
@@ -134,47 +136,55 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
           observacion
         }).eq('id', bloqueExistente.asistenciaId);
         if (errAsistencia) throw errAsistencia;
+
+        await supabase.from('cita')
+          .update({ observacion, estado, es_recuperacion: esRecuperacion })
+          .eq('id', targetCitaId);
       } else {
         const inicioEjecucion = new Date(dia);
         const [h, m] = hora.split(':').map(Number);
         inicioEjecucion.setHours(h, m, 0, 0);
 
+        // Si es recuperación: crear réplica en agenda y referenciarla directamente
+        if (esRecuperacion) {
+          const { data: citaRef } = await supabase.from('cita')
+            .select('paciente_id').eq('id', targetCitaId).single();
+          if (citaRef?.paciente_id) {
+            const finReplica = new Date(inicioEjecucion);
+            finReplica.setMinutes(finReplica.getMinutes() + 45);
+            const { data: newCita } = await supabase.from('cita').insert({
+              paciente_id: citaRef.paciente_id,
+              profesional_id: profesionalId,
+              fecha_hora_inicio: inicioEjecucion.toISOString(),
+              fecha_hora_fin: finReplica.toISOString(),
+              es_recuperacion: true,
+              estado: 'AGENDADA',
+              observacion: 'Sesión de recuperación'
+            }).select('id').single();
+            if (newCita) finalTargetCitaId = newCita.id;
+
+            // Cita original: anotar adelanto, NO marcar es_recuperacion
+            const nombreProf = profesionalesTotales.find((p: any) => p.id === profesionalId)?.nombre || '';
+            await supabase.from('cita').update({
+              estado,
+              observacion: 'Adelantada al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' — ' + nombreProf
+            }).eq('id', targetCitaId);
+          }
+        }
+
         const { error: errAsistencia } = await supabase.from('asistencia').insert([{
-          cita_oficial_id: targetCitaId,
+          cita_oficial_id: finalTargetCitaId,
           profesional_id: profesionalId,
           fecha_hora_ejecucion: inicioEjecucion.toISOString(),
           estado,
           observacion
         }]);
         if (errAsistencia) throw errAsistencia;
-      }
 
-      const { error: errCita } = await supabase.from('cita')
-        .update({ observacion, estado, es_recuperacion: esRecuperacion })
-        .eq('id', targetCitaId);
-      if (errCita) throw new Error(`Error sincronizando cita maestra: ${errCita.message}`);
-
-      // Si es recuperación, crear réplica en la agenda oficial
-      if (esRecuperacion) {
-        const { data: citaRef } = await supabase.from('cita')
-          .select('paciente_id').eq('id', targetCitaId).single();
-        if (citaRef?.paciente_id) {
-          const inicioReplica = new Date(dia);
-          const [h2, m2] = hora.split(':').map(Number);
-          inicioReplica.setHours(h2, m2, 0, 0);
-          const finReplica = new Date(inicioReplica);
-          finReplica.setMinutes(finReplica.getMinutes() + 45);
-
-          await supabase.from('cita').insert({
-            paciente_id: citaRef.paciente_id,
-            profesional_id: profesionalId || bloqueExistente?.profesionalId,
-            fecha_hora_inicio: inicioReplica.toISOString(),
-            fecha_hora_fin: finReplica.toISOString(),
-            es_recuperacion: true,
-            estado: 'AGENDADA',
-            observacion: 'Recuperación registrada desde asistencia diaria'
-          });
-        }
+        // Sincronizar réplica (o cita original si no es recuperación)
+        await supabase.from('cita')
+          .update({ observacion, estado, es_recuperacion: esRecuperacion })
+          .eq('id', finalTargetCitaId);
       }
 
       onSuccess();
