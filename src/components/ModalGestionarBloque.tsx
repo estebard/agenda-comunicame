@@ -93,7 +93,6 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
       .select('id, fecha_hora_inicio, profesional:profesional_id(nombre)')
       .eq('paciente_id', id)
       .in('estado', ['AGENDADA', 'CONFIRMADA'])
-      .eq('es_recuperacion', false)
       .order('fecha_hora_inicio', { ascending: false })
       .limit(15);
     setCitasDisponibles(data || []);
