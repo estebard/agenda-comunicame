@@ -93,6 +93,7 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
       .select('id, fecha_hora_inicio, profesional:profesional_id(nombre)')
       .eq('paciente_id', id)
       .in('estado', ['AGENDADA', 'CONFIRMADA'])
+      .eq('es_recuperacion', false)
       .order('fecha_hora_inicio', { ascending: false })
       .limit(15);
     setCitasDisponibles(data || []);
@@ -209,6 +210,16 @@ export default function ModalGestionarBloque({ isOpen, onClose, dia, hora, profe
     setIsDeleting(true);
     try {
       await supabase.from('asistencia').delete().eq('id', bloqueExistente.asistenciaId);
+
+      // Si la cita referenciada es una réplica, eliminarla también
+      if (bloqueExistente.citaOficialId) {
+        const { data: cita } = await supabase.from('cita')
+          .select('es_recuperacion').eq('id', bloqueExistente.citaOficialId).maybeSingle();
+        if (cita?.es_recuperacion) {
+          await supabase.from('cita').delete().eq('id', bloqueExistente.citaOficialId);
+        }
+      }
+
       onSuccess();
       onClose();
     } catch (err: any) {
