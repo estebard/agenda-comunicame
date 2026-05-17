@@ -336,8 +336,8 @@ function AgendaInner() {
                               const items = getCitaEnBloque(dia, hora, prof.id);
                               return items.length > 0 ? items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />)) : null;
                             })}
-                            {profsRender.filter((prof: any) => getCitaEnBloque(dia, hora, prof.id).length === 0).length === profsRender.length && (
-                              <div onClick={() => { const p = profsRender[0]; if (p) openSlot(dia, hora, p); }}
+                            {profsRender.some((prof: any) => getCitaEnBloque(dia, hora, prof.id).length === 0) && (
+                              <div onClick={() => { const p = profsRender.find((prof: any) => getCitaEnBloque(dia, hora, prof.id).length === 0); if (p) openSlot(dia, hora, p); }}
                                 className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
                               </div>
