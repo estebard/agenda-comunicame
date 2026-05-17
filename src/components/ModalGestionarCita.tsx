@@ -69,7 +69,6 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         .select('id, fecha_hora_inicio, estado, es_recuperacion, profesional:profesional_id(nombre)')
         .eq('paciente_id', pacienteId)
         .in('estado', ['AGENDADA', 'CONFIRMADA', 'ASISTE', 'NO_ASISTE'])
-        .is('referencia_cita_id', null)
         .order('fecha_hora_inicio', { ascending: false })
         .limit(30)
         .then(({ data }) => { if (data) setCitasOriginales(data); });

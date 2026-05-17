@@ -71,7 +71,7 @@ function AgendaInner() {
     const finSemana = addDays(inicioSemana, 5);
 
     let query = supabase.from('cita').select(`
-      id, fecha_hora_inicio, fecha_hora_fin, estado, observacion, es_recuperacion, referencia_cita_id,
+      id, fecha_hora_inicio, fecha_hora_fin, estado, observacion, es_recuperacion,
       paciente_id, profesional_id,
       paciente:paciente_id(nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles),
       profesional:profesional_id(nombre, especialidad)
