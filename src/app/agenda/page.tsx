@@ -395,7 +395,7 @@ function AgendaInner() {
                                 <>
                                   {items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />))}
                                   <div onClick={() => openSlot(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p)}
-                                    className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-50 hover:opacity-100 flex-1 min-h-[1.5rem]">
+                                    className="flex items-center justify-center border border-dashed border-slate-700 rounded-lg cursor-pointer opacity-60 hover:opacity-100 py-2 mt-1">
                                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
                                   </div>
                                 </>
