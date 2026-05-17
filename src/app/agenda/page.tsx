@@ -337,7 +337,7 @@ function AgendaInner() {
                               return items.length > 0 ? items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />)) : null;
                             })}
                             <div onClick={() => { const p = profsRender[0]; if (p) openSlot(dia, hora, p); }}
-                              className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
+                              className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-50 hover:opacity-100 flex-1 min-h-[2rem]">
                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
                             </div>
                           </div>
@@ -393,12 +393,11 @@ function AgendaInner() {
                                 <div className="h-full flex items-center justify-center text-[10px] font-black text-orange-500/50 uppercase tracking-widest">Colación</div>
                               ) : (
                                 <>
-                                  {items.length > 0 ? items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />)) : (
-                                    <div onClick={() => openSlot(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p)}
-                                      className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
-                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
-                                    </div>
-                                  )}
+                                  {items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />))}
+                                  <div onClick={() => openSlot(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p)}
+                                    className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-50 hover:opacity-100 flex-1 min-h-[1.5rem]">
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
+                                  </div>
                                 </>
                               )}
                             </div>
