@@ -105,13 +105,14 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
       fin.setMinutes(fin.getMinutes() + 45);
 
       if (esCrear) {
-        // Validar duplicados
+        // Validar duplicados: solo el mismo paciente en el mismo slot
         const { data: dup } = await supabase.from('cita')
           .select('id').eq('profesional_id', profesionalId)
+          .eq('paciente_id', pacienteId)
           .gte('fecha_hora_inicio', new Date(inicio.getTime() - 300000).toISOString())
           .lte('fecha_hora_inicio', new Date(inicio.getTime() + 300000).toISOString())
           .neq('estado', 'CANCELADA');
-        if (dup && dup.length > 0) { alert('Ya existe una cita en este slot.'); setIsSaving(false); return; }
+        if (dup && dup.length > 0) { alert('Este paciente ya tiene una cita en este slot.'); setIsSaving(false); return; }
 
         const payload: any = {
           paciente_id: pacienteId,
