@@ -25,8 +25,7 @@ export default function Sidebar() {
 
   const adminItems = [
     { name: 'Dashboard General', icon: LayoutDashboard, href: '/' },
-    { name: 'Agenda Oficial (Semanal)', icon: CalendarDays, href: '/planificacion' },
-    { name: 'Asistencia Diaria', icon: CalendarClock, href: '/asistencia' },
+    { name: 'Agenda', icon: CalendarDays, href: '/agenda' },
     { name: 'Pacientes / Historial', icon: Users, href: '/pacientes' },
     { name: 'Informes Solicitados', icon: FileText, href: '/informes' },
     { name: 'Citaciones ADOS-2', icon: ActivitySquare, href: '/ados2' },
@@ -35,7 +34,7 @@ export default function Sidebar() {
   ];
 
   const profItems = [
-    { name: 'Mi Agenda Diaria', icon: CalendarClock, href: '/asistencia' },
+    { name: 'Mi Agenda', icon: CalendarDays, href: '/agenda' },
   ];
 
   const menuItems = rol === 'profesional' ? profItems : adminItems;
