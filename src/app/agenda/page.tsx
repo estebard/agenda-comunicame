@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { format, addDays, startOfWeek, subWeeks, addWeeks, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addDays, startOfWeek, subWeeks, addWeeks, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Filter, FileText, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Filter, FileText, FileSpreadsheet, RefreshCw, Clock } from 'lucide-react';
 import ModalGestionarCita from '@/components/ModalGestionarCita';
 import { useAuth } from '@/lib/auth';
 import { jsPDF } from 'jspdf';
@@ -64,19 +64,26 @@ function AgendaInner() {
   const [citaSeleccionada, setCitaSeleccionada] = useState<any>(null);
   const [bloqueSeleccionado, setBloqueSeleccionado] = useState<{ dia: Date; hora: string; profesionalId: string; profesionalNombre: string } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [vistaDiaria, setVistaDiaria] = useState(false);
+  const [fechaDiaria, setFechaDiaria] = useState(() => {
+    const p = searchParams.get('fecha');
+    if (p) { const d = new Date(p + 'T12:00:00'); return isNaN(d.getTime()) ? new Date() : d; }
+    return new Date();
+  });
+  const [fechaTexto, setFechaTexto] = useState(format(new Date(), 'dd/MM/yyyy'));
 
   const fetchCitas = useCallback(async () => {
     setIsLoading(true);
-    const inicioSemana = startOfWeek(fechaBase, { weekStartsOn: 1 });
-    const finSemana = addDays(inicioSemana, 5);
+    const inicio = vistaDiaria ? startOfDay(fechaDiaria) : startOfWeek(fechaBase, { weekStartsOn: 1 });
+    const fin = vistaDiaria ? endOfDay(fechaDiaria) : addDays(startOfWeek(fechaBase, { weekStartsOn: 1 }), 5);
 
     let query = supabase.from('cita').select(`
       id, fecha_hora_inicio, fecha_hora_fin, estado, observacion, es_recuperacion,
       paciente_id, profesional_id,
       paciente:paciente_id(nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles),
       profesional:profesional_id(nombre, especialidad)
-    `).gte('fecha_hora_inicio', inicioSemana.toISOString())
-      .lt('fecha_hora_inicio', finSemana.toISOString());
+    `).gte('fecha_hora_inicio', inicio.toISOString())
+      .lt('fecha_hora_inicio', fin.toISOString());
 
     if (!mostrarTodos && profesionalSel) query = query.eq('profesional_id', profesionalSel);
 
@@ -92,7 +99,7 @@ function AgendaInner() {
     setMonthlyData(mData || []);
 
     setIsLoading(false);
-  }, [fechaBase, profesionalSel, mostrarTodos]);
+  }, [fechaBase, profesionalSel, mostrarTodos, vistaDiaria, fechaDiaria]);
 
   useEffect(() => {
     supabase.from('profesional').select('*').order('nombre').then(({ data }) => {
@@ -117,9 +124,15 @@ function AgendaInner() {
   useEffect(() => { fetchCitas(); }, [fetchCitas]);
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('semana', format(fechaBase, 'yyyy-MM-dd'));
+    if (vistaDiaria) {
+      params.set('fecha', format(fechaDiaria, 'yyyy-MM-dd'));
+      params.delete('semana');
+    } else {
+      params.set('semana', format(fechaBase, 'yyyy-MM-dd'));
+      params.delete('fecha');
+    }
     router.replace('?' + params.toString(), { scroll: false });
-  }, [fechaBase]);
+  }, [fechaBase, fechaDiaria, vistaDiaria]);
 
   const inicioSemana = startOfWeek(fechaBase, { weekStartsOn: 1 });
   const diasRender = DIAS_SEMANA.map(o => addDays(inicioSemana, o - 1));
@@ -132,6 +145,18 @@ function AgendaInner() {
       c.profesional_id === profId &&
       Math.abs(new Date(c.fecha_hora_inicio).getTime() - fb.getTime()) < 300000
     );
+  };
+
+  const avanzarDia = (n: number) => { const d = new Date(fechaDiaria); d.setDate(d.getDate() + n); setFechaDiaria(d); setFechaTexto(format(d, 'dd/MM/yyyy')); };
+
+  const parsearFechaManual = (val: string) => {
+    setFechaTexto(val);
+    const match = val.replace(/\s/g, '').match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (match) {
+      let year = parseInt(match[3]); if (year < 100) year += 2000;
+      const d = new Date(year, parseInt(match[2]) - 1, parseInt(match[1]), 12);
+      if (!isNaN(d.getTime())) { setFechaDiaria(d); setFechaTexto(format(d, 'dd/MM/yyyy')); }
+    }
   };
 
   const openSlot = (dia: Date, hora: string, prof: any) => {
@@ -218,6 +243,24 @@ function AgendaInner() {
     setIsExporting(false);
   };
 
+  const CitaCard = ({ cita, onClick }: { cita: any; onClick: () => void }) => (
+    <div onClick={onClick} className={`p-2 rounded-lg cursor-pointer transition-colors shadow-sm flex flex-col ${getEstilosEstado(cita.estado)}`}>
+      <div className="flex justify-between items-start mb-1">
+        <span className="text-[11px] font-black uppercase leading-tight truncate">{cita.paciente?.nombre_completo}</span>
+        <span className="text-[9px] font-bold opacity-80 whitespace-nowrap">{cita.paciente?.fecha_nacimiento ? (() => { const h = new Date(); const c = new Date(cita.paciente.fecha_nacimiento); let e = h.getFullYear() - c.getFullYear(); if (h.getMonth() < c.getMonth() || (h.getMonth() === c.getMonth() && h.getDate() < c.getDate())) e--; return e + 'a'; })() : ''}</span>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap mb-1">
+        <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
+        {cita.es_recuperacion && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
+        {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
+        <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
+          {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
+        </span>
+      </div>
+      {cita.observacion && <div className="text-[8px] text-slate-400 italic leading-tight line-clamp-2 mt-0.5">{cita.observacion}</div>}
+    </div>
+  );
+
   return (
     <main className="p-4 md:p-8 space-y-6 h-[calc(100vh-2rem)] flex flex-col">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -226,11 +269,27 @@ function AgendaInner() {
           <p className="text-sm font-bold text-slate-400 mt-1">Planificación y asistencia diaria</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-            <button onClick={() => setFechaBase(subWeeks(fechaBase, 1))} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-400" /></button>
-            <span className="text-sm font-black text-slate-200 min-w-[180px] text-center">{format(inicioSemana, "dd MMM", { locale: es })} — {format(addDays(inicioSemana, 4), "dd MMM yyyy", { locale: es })}</span>
-            <button onClick={() => setFechaBase(addWeeks(fechaBase, 1))} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-400" /></button>
+          <div className="flex bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <button onClick={() => setVistaDiaria(false)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest ${!vistaDiaria ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Semanal</button>
+            <button onClick={() => setVistaDiaria(true)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest ${vistaDiaria ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Diario</button>
           </div>
+          {!vistaDiaria && (
+            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+              <button onClick={() => setFechaBase(subWeeks(fechaBase, 1))} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-400" /></button>
+              <span className="text-sm font-black text-slate-200 min-w-[180px] text-center">{format(inicioSemana, "dd MMM", { locale: es })} — {format(addDays(inicioSemana, 4), "dd MMM yyyy", { locale: es })}</span>
+              <button onClick={() => setFechaBase(addWeeks(fechaBase, 1))} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-400" /></button>
+            </div>
+          )}
+          {vistaDiaria && (
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+              <button onClick={() => avanzarDia(-1)} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronLeft size={18} className="text-slate-400" /></button>
+              <span className="text-xs font-bold text-slate-400">{format(fechaDiaria, "EEEE", { locale: es })}</span>
+              <input type="text" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-200 outline-none focus:border-blue-500 text-center w-[100px]"
+                value={fechaTexto} onChange={(e) => parsearFechaManual(e.target.value)}
+                onBlur={() => setFechaTexto(format(fechaDiaria, 'dd/MM/yyyy'))} placeholder="DD/MM/AAAA" />
+              <button onClick={() => avanzarDia(1)} className="p-1.5 hover:bg-slate-800 rounded-lg"><ChevronRight size={18} className="text-slate-400" /></button>
+            </div>
+          )}
           <div className="flex bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
             <button onClick={() => setMostrarTodos(false)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest ${!mostrarTodos ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Individual</button>
             <button onClick={() => setMostrarTodos(true)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest ${mostrarTodos ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Todos</button>
@@ -253,59 +312,106 @@ function AgendaInner() {
         {isLoading && <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center z-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>}
         <div className="flex-1 overflow-x-auto overflow-y-auto">
           <table className="min-w-full border-collapse table-fixed h-full">
-            <thead>
-              <tr>
-                <th className="w-24 bg-slate-950 border-b border-r border-slate-800 p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest sticky top-0 left-0 z-30">Hora</th>
-                {diasRender.map((d, i) => (
-                  <th key={d.toISOString()} className={`border-b border-r border-slate-800 p-3 min-w-[240px] sticky top-0 z-20 ${getFondoColumna(i)}`}>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(d, 'EEEE', { locale: es })}</div>
-                    <div className="text-2xl font-black text-slate-100 leading-none mt-1">{format(d, 'dd')}</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {HORARIOS.map(hora => (
-                <tr key={hora}>
-                  <td className="bg-slate-950 border-b border-r border-slate-800 p-2 text-center text-[11px] font-black text-slate-400 sticky left-0 z-10">{hora}</td>
-                  {diasRender.map((dia, di) => (
-                    <td key={`${dia.getTime()}-${hora}`} className={`border-b border-r border-slate-800 p-1.5 align-top min-h-[6rem] ${getFondoColumna(di)}`}>
-                      <div className="flex flex-col gap-1 h-full min-h-[5rem]">
-                        {profsRender.map((prof: any) => {
-                          const items = getCitaEnBloque(dia, hora, prof.id);
-                          return items.length > 0 ? items.map((cita: any) => (
-                            <div key={cita.id} onClick={() => openCita(cita)}
-                              className={`p-2 rounded-lg cursor-pointer transition-colors shadow-sm flex flex-col ${getEstilosEstado(cita.estado)}`}>
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="text-[11px] font-black uppercase leading-tight truncate">{cita.paciente?.nombre_completo}</span>
-                                <span className="text-[9px] font-bold opacity-80 whitespace-nowrap">{cita.paciente?.fecha_nacimiento ? (() => { const h = new Date(); const c = new Date(cita.paciente.fecha_nacimiento); let e = h.getFullYear() - c.getFullYear(); if (h.getMonth() < c.getMonth() || (h.getMonth() === c.getMonth() && h.getDate() < c.getDate())) e--; return e + 'a'; })() : ''}</span>
+            {!vistaDiaria ? (
+              <>
+                <thead>
+                  <tr>
+                    <th className="w-24 bg-slate-950 border-b border-r border-slate-800 p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest sticky top-0 left-0 z-30">Hora</th>
+                    {diasRender.map((d, i) => (
+                      <th key={d.toISOString()} className={`border-b border-r border-slate-800 p-3 min-w-[240px] sticky top-0 z-20 ${getFondoColumna(i)}`}>
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{format(d, 'EEEE', { locale: es })}</div>
+                        <div className="text-2xl font-black text-slate-100 leading-none mt-1">{format(d, 'dd')}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {HORARIOS.map(hora => (
+                    <tr key={hora}>
+                      <td className="bg-slate-950 border-b border-r border-slate-800 p-2 text-center text-[11px] font-black text-slate-400 sticky left-0 z-10">{hora}</td>
+                      {diasRender.map((dia, di) => (
+                        <td key={`${dia.getTime()}-${hora}`} className={`border-b border-r border-slate-800 p-1.5 align-top min-h-[6rem] ${getFondoColumna(di)}`}>
+                          <div className="flex flex-col gap-1 h-full min-h-[5rem]">
+                            {profsRender.map((prof: any) => {
+                              const items = getCitaEnBloque(dia, hora, prof.id);
+                              return items.length > 0 ? items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />)) : null;
+                            })}
+                            {profsRender.filter((prof: any) => getCitaEnBloque(dia, hora, prof.id).length === 0).length === profsRender.length && (
+                              <div onClick={() => { const p = profsRender[0]; if (p) openSlot(dia, hora, p); }}
+                                className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
                               </div>
-                              <div className="flex items-center gap-1 flex-wrap mb-1">
-                                <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
-                                {cita.es_recuperacion && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
-                                {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
-                                <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
-                                  {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
-                                </span>
-                              </div>
-                              {cita.observacion && (
-                                <div className="text-[8px] text-slate-400 italic leading-tight line-clamp-2 mt-0.5">{cita.observacion}</div>
+                            )}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </>
+            ) : (
+              <>
+                <thead>
+                  <tr>
+                    <th className="w-24 bg-slate-950 border-b border-r border-slate-800 p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest sticky top-0 left-0 z-30">Hora</th>
+                    {profsRender.map((p: any, i: number) => (
+                      <th key={p.id} className={`border-b border-r border-slate-800 p-3 min-w-[240px] sticky top-0 z-20 ${getFondoColumna(i)}`}>
+                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{p.especialidad}</div>
+                        <div className="text-sm font-black text-slate-200 uppercase">{p.nombre}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {HORARIOS.map(hora => (
+                    <tr key={hora}>
+                      <td className="bg-slate-950 border-b border-r border-slate-800 p-2 text-center text-[11px] font-black text-slate-400 sticky left-0 z-10">
+                        {hora === '13:00' ? <Clock size={14} className="mx-auto text-orange-500" /> : hora}
+                      </td>
+                      {profsRender.map((p: any, i: number) => {
+                        const items = getCitaEnBloque(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p.id);
+  const CitaCard = ({ cita, onClick }: { cita: any; onClick: () => void }) => (
+    <div onClick={onClick} className={`p-2 rounded-lg cursor-pointer transition-colors shadow-sm flex flex-col ${getEstilosEstado(cita.estado)}`}>
+      <div className="flex justify-between items-start mb-1">
+        <span className="text-[11px] font-black uppercase leading-tight truncate">{cita.paciente?.nombre_completo}</span>
+        <span className="text-[9px] font-bold opacity-80 whitespace-nowrap">{cita.paciente?.fecha_nacimiento ? (() => { const h = new Date(); const c = new Date(cita.paciente.fecha_nacimiento); let e = h.getFullYear() - c.getFullYear(); if (h.getMonth() < c.getMonth() || (h.getMonth() === c.getMonth() && h.getDate() < c.getDate())) e--; return e + 'a'; })() : ''}</span>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap mb-1">
+        <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
+        {cita.es_recuperacion && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
+        {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
+        <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
+          {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
+        </span>
+      </div>
+      {cita.observacion && <div className="text-[8px] text-slate-400 italic leading-tight line-clamp-2 mt-0.5">{cita.observacion}</div>}
+    </div>
+  );
+
+  return (
+                          <td key={`${p.id}-${hora}`} className={`border-b border-r border-slate-800 p-1.5 align-top min-h-[6rem] ${hora === '13:00' ? 'bg-slate-950' : getFondoColumna(i)}`}>
+                            <div className="flex flex-col gap-1 h-full min-h-[5rem]">
+                              {hora === '13:00' ? (
+                                <div className="h-full flex items-center justify-center text-[10px] font-black text-orange-500/50 uppercase tracking-widest">Colación</div>
+                              ) : (
+                                <>
+                                  {items.length > 0 ? items.map((cita: any) => (<CitaCard key={cita.id} cita={cita} onClick={() => openCita(cita)} />)) : (
+                                    <div onClick={() => openSlot(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p)}
+                                      className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
+                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
-                          )) : null;
-                        })}
-                        {profsRender.filter((prof: any) => getCitaEnBloque(dia, hora, prof.id).length === 0).length === profsRender.length && (
-                          <div onClick={() => { const p = profsRender[0]; if (p) openSlot(dia, hora, p); }}
-                            className="flex items-center justify-center border-2 border-dashed border-slate-800/50 rounded-lg cursor-pointer opacity-0 hover:opacity-100 flex-1">
-                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">+ Agendar</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </tbody>
+                </tbody>
+              </>
+            )}
           </table>
         </div>
       </section>
