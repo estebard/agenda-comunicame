@@ -29,8 +29,7 @@ const getEstilosEstado = (estado: string) => {
     case 'CONFIRMADA': return 'border-l-4 border-blue-500 bg-blue-900/60 text-blue-100';
     case 'ASISTE': return 'border-l-4 border-emerald-500 bg-emerald-900/60 text-emerald-100';
     case 'NO_ASISTE': return 'border-l-4 border-red-500 bg-red-900/60 text-red-100';
-    case 'RECUPERADA':
-    case 'ADELANTADA': return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-500 opacity-50';
+    case 'REASIGNADA': return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-500 opacity-50';
     case 'CANCELADA': return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-400 opacity-60';
     default: return 'border-l-4 border-amber-500 bg-amber-900/40 text-amber-100';
   }
@@ -80,7 +79,7 @@ function AgendaInner() {
     const fin = vistaDiaria ? endOfDay(fechaDiaria) : addDays(startOfWeek(fechaBase, { weekStartsOn: 1 }), 5);
 
     let query = supabase.from('cita').select(`
-      id, fecha_hora_inicio, fecha_hora_fin, estado, observacion, es_recuperacion,
+      id, fecha_hora_inicio, fecha_hora_fin, estado, observacion, es_recuperacion, grupo,
       paciente_id, profesional_id,
       paciente:paciente_id(nombre_completo, fecha_nacimiento, nombre_apoderado, tokens_disponibles),
       profesional:profesional_id(nombre, especialidad)
@@ -253,6 +252,7 @@ function AgendaInner() {
       </div>
       <div className="flex items-center gap-1 flex-wrap mb-1">
         <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
+        {cita.grupo && <span className="bg-orange-900/40 text-orange-400 text-[7px] font-black px-1 py-0.5 rounded border border-orange-500/30 uppercase">GRUPO</span>}
         {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
         {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
         <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
@@ -378,6 +378,7 @@ function AgendaInner() {
       </div>
       <div className="flex items-center gap-1 flex-wrap mb-1">
         <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
+        {cita.grupo && <span className="bg-orange-900/40 text-orange-400 text-[7px] font-black px-1 py-0.5 rounded border border-orange-500/30 uppercase">GRUPO</span>}
         {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
         {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
         <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>

@@ -129,17 +129,12 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
 
           if (orgData) {
             const fechaOrig = new Date(orgData.fecha_hora_inicio);
-            const esPasada = fechaOrig < dia;
-            const nuevoEstado = esPasada ? 'RECUPERADA' : 'ADELANTADA';
-            const preview = esPasada
-              ? 'Recupera del ' + format(fechaOrig, 'dd/MM HH:mm')
-              : 'Se adelanta del ' + format(fechaOrig, 'dd/MM HH:mm');
             const profName = profesionalNombre || '';
 
             const { error: errUpdate } = await supabase.from('cita').update({
-              estado: nuevoEstado,
+              estado: 'REASIGNADA',
               observacion: (orgData.observacion ? orgData.observacion + ' | ' : '') +
-                (esPasada ? 'Recupera al ' : 'Se adelanta al ') + format(dia, 'dd/MM') + ' ' + hora + ' con ' + profName
+                'Reasignada al ' + format(dia, 'dd/MM') + ' ' + hora + ' con ' + profName
             }).eq('id', originalId);
 
             if (errUpdate) {
@@ -149,10 +144,20 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
             }
 
             payload.referencia_cita_id = originalId;
-            payload.es_recuperacion = true;
             payload.observacion = (observacion.trim() ? observacion.trim() + ' | ' : '') +
-              preview + ' (' + format(fechaOrig, 'dd/MM HH:mm') + ')';
+              'Original: ' + format(fechaOrig, 'dd/MM HH:mm') + ' — ' + profName;
           }
+        }
+
+        // GRUPO: si el slot ya tiene citas activas, marcar todas como grupo
+        const { data: existentes } = await supabase.from('cita')
+          .select('id').eq('profesional_id', profesionalId)
+          .gte('fecha_hora_inicio', new Date(inicio.getTime() - 300000).toISOString())
+          .lte('fecha_hora_inicio', new Date(inicio.getTime() + 300000).toISOString())
+          .not('estado', 'in', '("CANCELADA","REASIGNADA")');
+        if (existentes && existentes.length > 0) {
+          payload.grupo = true;
+          await supabase.from('cita').update({ grupo: true }).in('id', existentes.map((e: any) => e.id));
         }
 
         const initialInsert = [payload];
@@ -221,9 +226,9 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
 
       const profName = profesionalNombre || '';
       const { error: errUpdate } = await supabase.from('cita').update({
-        estado: 'ADELANTADA',
+        estado: 'REASIGNADA',
         observacion: (citaExistente.observacion ? citaExistente.observacion + ' | ' : '') +
-          'Se adelanta al ' + format(inicioAd, 'dd/MM HH:mm') + ' con ' + profName
+          'Reasignada al ' + format(inicioAd, 'dd/MM HH:mm') + ' con ' + profName
       }).eq('id', citaExistente.id);
 
       if (errUpdate) {
@@ -238,9 +243,8 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         fecha_hora_inicio: inicioAd.toISOString(),
         fecha_hora_fin: new Date(inicioAd.getTime() + 45 * 60000).toISOString(),
         estado: 'AGENDADA',
-        es_recuperacion: true,
         referencia_cita_id: citaExistente.id,
-        observacion: 'Adelanta sesión del ' + format(new Date(citaExistente.fecha_hora_inicio), 'dd/MM HH:mm')
+        observacion: 'Original: ' + format(new Date(citaExistente.fecha_hora_inicio), 'dd/MM HH:mm') + ' — ' + profName
       });
 
       onSuccess();
@@ -346,8 +350,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
                 <option value="CONFIRMADA">Confirmada</option>
                 <option value="ASISTE">Asiste</option>
                 <option value="NO_ASISTE">No Asiste</option>
-                <option value="RECUPERADA">Recuperada</option>
-                <option value="ADELANTADA">Adelantada</option>
+                <option value="REASIGNADA">Reasignada</option>
                 <option value="CANCELADA">Cancelada</option>
               </select>
             </div>
