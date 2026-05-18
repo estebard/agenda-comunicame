@@ -253,7 +253,7 @@ function AgendaInner() {
       </div>
       <div className="flex items-center gap-1 flex-wrap mb-1">
         <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
-        {cita.es_recuperacion && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
+        {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
         {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
         <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
           {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
@@ -378,7 +378,7 @@ function AgendaInner() {
       </div>
       <div className="flex items-center gap-1 flex-wrap mb-1">
         <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
-        {cita.es_recuperacion && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
+        {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
         {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
         <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
           {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
