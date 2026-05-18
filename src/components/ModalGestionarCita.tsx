@@ -139,7 +139,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
             const { error: errUpdate } = await supabase.from('cita').update({
               estado: nuevoEstado,
               observacion: (orgData.observacion ? orgData.observacion + ' | ' : '') +
-                preview + ' al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' con ' + profName
+                (esPasada ? 'Recupera al ' : 'Se adelanta al ') + format(dia, 'dd/MM') + ' ' + hora + ' con ' + profName
             }).eq('id', originalId);
 
             if (errUpdate) {
