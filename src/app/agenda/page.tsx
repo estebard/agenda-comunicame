@@ -29,6 +29,7 @@ const getEstilosEstado = (estado: string) => {
     case 'CONFIRMADA': return 'border-l-4 border-blue-500 bg-blue-900/60 text-blue-100';
     case 'ASISTE': return 'border-l-4 border-emerald-500 bg-emerald-900/60 text-emerald-100';
     case 'NO_ASISTE': return 'border-l-4 border-red-500 bg-red-900/60 text-red-100';
+    case 'ADELANTADA': return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-500 opacity-50';
     case 'CANCELADA': return 'border-l-4 border-slate-500 bg-slate-800/60 text-slate-400 opacity-60';
     default: return 'border-l-4 border-amber-500 bg-amber-900/40 text-amber-100';
   }

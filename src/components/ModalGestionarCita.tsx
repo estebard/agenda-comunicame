@@ -129,7 +129,11 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
           const preview = getPreviewText();
           const original = citasOriginales.find(c => c.id === originalId);
           const profName = original?.profesional?.nombre || profesionalNombre || '';
+          const fechaOrig = original ? format(new Date(original.fecha_hora_inicio), 'dd/MM HH:mm') : '';
+          payload.observacion = (observacion.trim() ? observacion.trim() + ' | ' : '') + preview + ' (' + fechaOrig + ')';
+
           await supabase.from('cita').update({
+            estado: 'ADELANTADA',
             observacion: (original?.observacion ? original.observacion + ' | ' : '') +
               preview + ' con ' + profName
           }).eq('id', originalId);
@@ -207,11 +211,12 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         estado: 'AGENDADA',
         es_recuperacion: true,
         referencia_cita_id: citaExistente.id,
-        observacion: 'Sesión adelantada'
+        observacion: 'Adelanta sesión del ' + format(new Date(citaExistente.fecha_hora_inicio), 'dd/MM HH:mm')
       }).select('id').single();
 
       const profName = profesionalNombre || '';
       await supabase.from('cita').update({
+        estado: 'ADELANTADA',
         observacion: (citaExistente.observacion ? citaExistente.observacion + ' | ' : '') +
           'Se adelanta al ' + format(inicioAd, 'dd/MM HH:mm') + ' con ' + profName
       }).eq('id', citaExistente.id);
@@ -319,6 +324,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
                 <option value="CONFIRMADA">Confirmada</option>
                 <option value="ASISTE">Asiste</option>
                 <option value="NO_ASISTE">No Asiste</option>
+                <option value="ADELANTADA">Adelantada</option>
                 <option value="CANCELADA">Cancelada</option>
               </select>
             </div>
