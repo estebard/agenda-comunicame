@@ -124,9 +124,6 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         };
 
         if (vincularOriginal && originalId) {
-          payload.referencia_cita_id = originalId;
-          payload.es_recuperacion = true;
-
           const { data: orgData } = await supabase.from('cita')
             .select('fecha_hora_inicio, observacion').eq('id', originalId).single();
 
@@ -139,12 +136,20 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
               : 'Se adelanta del ' + format(fechaOrig, 'dd/MM HH:mm');
             const profName = profesionalNombre || '';
 
-            await supabase.from('cita').update({
+            const { error: errUpdate } = await supabase.from('cita').update({
               estado: nuevoEstado,
               observacion: (orgData.observacion ? orgData.observacion + ' | ' : '') +
                 preview + ' al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' con ' + profName
             }).eq('id', originalId);
 
+            if (errUpdate) {
+              alert('Error al actualizar cita original: ' + errUpdate.message);
+              setIsSaving(false);
+              return;
+            }
+
+            payload.referencia_cita_id = originalId;
+            payload.es_recuperacion = true;
             payload.observacion = (observacion.trim() ? observacion.trim() + ' | ' : '') +
               preview + ' (' + format(fechaOrig, 'dd/MM HH:mm') + ')';
           }
@@ -214,7 +219,20 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
       const inicioAd = new Date(adelantarFecha + 'T12:00:00');
       inicioAd.setHours(ah, am, 0, 0);
 
-      const { data: newCita } = await supabase.from('cita').insert({
+      const profName = profesionalNombre || '';
+      const { error: errUpdate } = await supabase.from('cita').update({
+        estado: 'ADELANTADA',
+        observacion: (citaExistente.observacion ? citaExistente.observacion + ' | ' : '') +
+          'Se adelanta al ' + format(inicioAd, 'dd/MM HH:mm') + ' con ' + profName
+      }).eq('id', citaExistente.id);
+
+      if (errUpdate) {
+        alert('Error al actualizar cita original: ' + errUpdate.message);
+        setIsSaving(false);
+        return;
+      }
+
+      await supabase.from('cita').insert({
         paciente_id: citaExistente.paciente_id,
         profesional_id: citaExistente.profesional_id,
         fecha_hora_inicio: inicioAd.toISOString(),
@@ -223,14 +241,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         es_recuperacion: true,
         referencia_cita_id: citaExistente.id,
         observacion: 'Adelanta sesión del ' + format(new Date(citaExistente.fecha_hora_inicio), 'dd/MM HH:mm')
-      }).select('id').single();
-
-      const profName = profesionalNombre || '';
-      await supabase.from('cita').update({
-        estado: 'ADELANTADA',
-        observacion: (citaExistente.observacion ? citaExistente.observacion + ' | ' : '') +
-          'Se adelanta al ' + format(inicioAd, 'dd/MM HH:mm') + ' con ' + profName
-      }).eq('id', citaExistente.id);
+      });
 
       onSuccess();
       onClose();
