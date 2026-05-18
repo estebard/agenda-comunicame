@@ -126,17 +126,28 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         if (vincularOriginal && originalId) {
           payload.referencia_cita_id = originalId;
           payload.es_recuperacion = true;
-          const preview = getPreviewText();
-          const original = citasOriginales.find(c => c.id === originalId);
-          const profName = original?.profesional?.nombre || profesionalNombre || '';
-          const fechaOrig = original ? format(new Date(original.fecha_hora_inicio), 'dd/MM HH:mm') : '';
-          payload.observacion = (observacion.trim() ? observacion.trim() + ' | ' : '') + preview + ' (' + fechaOrig + ')';
 
-          await supabase.from('cita').update({
-            estado: 'ADELANTADA',
-            observacion: (original?.observacion ? original.observacion + ' | ' : '') +
-              preview + ' con ' + profName
-          }).eq('id', originalId);
+          const { data: orgData } = await supabase.from('cita')
+            .select('fecha_hora_inicio, observacion').eq('id', originalId).single();
+
+          if (orgData) {
+            const fechaOrig = new Date(orgData.fecha_hora_inicio);
+            const esPasada = fechaOrig < dia;
+            const nuevoEstado = esPasada ? 'RECUPERADA' : 'ADELANTADA';
+            const preview = esPasada
+              ? 'Recupera del ' + format(fechaOrig, 'dd/MM HH:mm')
+              : 'Se adelanta del ' + format(fechaOrig, 'dd/MM HH:mm');
+            const profName = profesionalNombre || '';
+
+            await supabase.from('cita').update({
+              estado: nuevoEstado,
+              observacion: (orgData.observacion ? orgData.observacion + ' | ' : '') +
+                preview + ' al ' + format(dia, 'dd/MM HH:mm', { locale: es }) + ' con ' + profName
+            }).eq('id', originalId);
+
+            payload.observacion = (observacion.trim() ? observacion.trim() + ' | ' : '') +
+              preview + ' (' + format(fechaOrig, 'dd/MM HH:mm') + ')';
+          }
         }
 
         const initialInsert = [payload];
@@ -324,6 +335,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
                 <option value="CONFIRMADA">Confirmada</option>
                 <option value="ASISTE">Asiste</option>
                 <option value="NO_ASISTE">No Asiste</option>
+                <option value="RECUPERADA">Recuperada</option>
                 <option value="ADELANTADA">Adelantada</option>
                 <option value="CANCELADA">Cancelada</option>
               </select>
