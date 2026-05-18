@@ -39,7 +39,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
 
   useEffect(() => {
     if (isOpen) {
-      supabase.from('paciente').select('id, nombre_completo').order('nombre_completo').then(({ data }) => {
+      supabase.from('paciente').select('id, nombre_completo').eq('activo', true).order('nombre_completo').then(({ data }) => {
         if (data) setPacientes(data);
       });
 
