@@ -24,9 +24,16 @@ export default function DashboardGeneral() {
 
   useEffect(() => {
     async function fetchData() {
+      console.log('[DASHBOARD] Iniciando fetchData');
+      console.log('[DASHBOARD] supabase client:', supabase ? 'ok' : 'null');
+
+      const { data: session } = await supabase.auth.getSession();
+      console.log('[DASHBOARD] Sesion:', session?.session?.user?.email || 'SIN SESION');
+
       const hoy = new Date();
       const inicioHoy = startOfDay(hoy).toISOString();
       const finHoy = endOfDay(hoy).toISOString();
+      console.log('[DASHBOARD] Filtros:', { inicioHoy, finHoy });
 
       const [citasRes, asistenciasRes, criticosRes] = await Promise.all([
         supabase
@@ -51,8 +58,16 @@ export default function DashboardGeneral() {
           .limit(5)
       ]);
 
+      console.log('[DASHBOARD] RESULTADOS:');
+      console.log('[DASHBOARD] citas:', citasRes ? { count: citasRes.data?.length, error: citasRes.error, sample: citasRes.data?.[0] } : 'null');
+      console.log('[DASHBOARD] asistencias:', asistenciasRes ? { count: asistenciasRes.data?.length, error: asistenciasRes.error } : 'null');
+      console.log('[DASHBOARD] criticos:', criticosRes ? { count: criticosRes.data?.length, error: criticosRes.error, sample: criticosRes.data?.[0] } : 'null');
+
       const citas = citasRes.data || [];
       const asistenciasData = asistenciasRes.data || [];
+
+      console.log('[DASHBOARD] Citas para hoy:', citas.length);
+      console.log('[DASHBOARD] Asistencias para hoy:', asistenciasData.length);
 
       setTotalCitas(citas.length);
       setAsistencias(asistenciasData.filter(a => a.estado === 'ASISTE').length);
@@ -66,10 +81,13 @@ export default function DashboardGeneral() {
         acc[prof]++;
         return acc;
       }, {} as Record<string, number>);
+      console.log('[DASHBOARD] Carga por profesional:', carga);
       setCargaPorProfesional(carga);
 
+      console.log('[DASHBOARD] Pacientes criticos:', criticosRes.data?.length || 0);
       setPacientesCriticos(criticosRes.data || []);
       setLoading(false);
+      console.log('[DASHBOARD] fetchData completado');
     }
 
     fetchData();
