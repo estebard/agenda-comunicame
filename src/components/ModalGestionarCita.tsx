@@ -64,6 +64,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         setVincularOriginal(false);
         setOriginalId('');
         setShowAdelantar(false);
+        setIsOriginalReferenciada(false);
       }
       setCitasOriginales([]);
     }

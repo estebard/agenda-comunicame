@@ -173,18 +173,20 @@ function AgendaInner() {
   };
 
   // Export
-  const rowsParaReporte = () => {
+  const rowsParaReporte = (dias: Date[]) => {
     const rows: any[] = [];
-    HORARIOS.forEach(hora => {
-      profsRender.forEach((p: any) => {
-        const items = getCitaEnBloque(new Date(), hora, p.id);
-        items.forEach((c: any) => {
-          rows.push({ hora, profesional: p.nombre, especialidad: p.especialidad,
-            paciente: c.paciente?.nombre_completo || '—', estado: c.estado,
-            observacion: c.observacion || '', tokens: c.paciente?.tokens_disponibles ?? '—',
-            recuperacion: c.es_recuperacion ? 'Sí' : 'No',
-            apoderado: c.paciente?.nombre_apoderado || '—',
-            agenda: format(new Date(c.fecha_hora_inicio), 'dd/MM HH:mm') });
+    dias.forEach(dia => {
+      HORARIOS.forEach(hora => {
+        profsRender.forEach((p: any) => {
+          const items = getCitaEnBloque(dia, hora, p.id);
+          items.forEach((c: any) => {
+            rows.push({ dia: format(dia, 'dd/MM'), hora, profesional: p.nombre, especialidad: p.especialidad,
+              paciente: c.paciente?.nombre_completo || '—', estado: c.estado,
+              observacion: c.observacion || '', tokens: c.paciente?.tokens_disponibles ?? '—',
+              recuperacion: c.es_recuperacion ? 'Sí' : 'No',
+              apoderado: c.paciente?.nombre_apoderado || '—',
+              agenda: format(new Date(c.fecha_hora_inicio), 'dd/MM HH:mm') });
+          });
         });
       });
     });
@@ -194,15 +196,17 @@ function AgendaInner() {
   const exportarPDF = () => {
     setIsExporting(true);
     const doc = new jsPDF({ orientation: 'landscape' });
+    const fechaExport = vistaDiaria ? fechaDiaria : fechaBase;
     doc.setFontSize(14);
-    doc.text('Informe de Agenda — ' + format(fechaBase, 'dd/MM/yyyy'), 14, 15);
+    doc.text('Informe de Agenda — ' + format(fechaExport, 'dd/MM/yyyy'), 14, 15);
     doc.setFontSize(9); doc.text('Centro Comunícame', 14, 22);
 
-    const rows = rowsParaReporte();
+    const diasExport = vistaDiaria ? [new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate())] : diasRender;
+    const rows = rowsParaReporte(diasExport);
     autoTable(doc, {
       startY: 28,
-      head: [['Hora', 'Prof.', 'Esp.', 'Paciente', 'Estado', 'Obs.', 'Tokens', 'Recup.', 'Apo.', 'Agenda']],
-      body: rows.map((r: any) => [r.hora, r.profesional, r.especialidad, r.paciente, r.estado, r.observacion, String(r.tokens), r.recuperacion, r.apoderado, r.agenda]),
+      head: [['Día', 'Hora', 'Prof.', 'Esp.', 'Paciente', 'Estado', 'Obs.', 'Tokens', 'Recup.', 'Apo.', 'Agenda']],
+      body: rows.map((r: any) => [r.dia, r.hora, r.profesional, r.especialidad, r.paciente, r.estado, r.observacion, String(r.tokens), r.recuperacion, r.apoderado, r.agenda]),
       styles: { fontSize: 6, cellPadding: 2 },
       headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [243, 244, 246] },
@@ -231,16 +235,18 @@ function AgendaInner() {
     y = (doc as any).lastAutoTable.finalY + 8;
     autoTable(doc, { startY: y, head: [['Profesional', 'Total', 'Asiste', 'No Asiste']], body: porProf, styles: { fontSize: 7 }, headStyles: { fillColor: [16, 185, 129], textColor: 255 } });
 
-    doc.save('agenda_' + format(fechaBase, 'yyyy-MM-dd') + '.pdf');
+    doc.save('agenda_' + format(fechaExport, 'yyyy-MM-dd') + '.pdf');
     setIsExporting(false);
   };
 
   const exportarExcel = () => {
     setIsExporting(true);
-    const ws = XLSX.utils.json_to_sheet(rowsParaReporte());
+    const diasExport = vistaDiaria ? [new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate())] : diasRender;
+    const ws = XLSX.utils.json_to_sheet(rowsParaReporte(diasExport));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Agenda');
-    XLSX.writeFile(wb, 'agenda_' + format(fechaBase, 'yyyy-MM-dd') + '.xlsx');
+    const fechaExport = vistaDiaria ? fechaDiaria : fechaBase;
+    XLSX.writeFile(wb, 'agenda_' + format(fechaExport, 'yyyy-MM-dd') + '.xlsx');
     setIsExporting(false);
   };
 
