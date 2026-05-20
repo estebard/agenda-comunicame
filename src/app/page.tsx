@@ -99,7 +99,7 @@ export default function DashboardGeneral() {
     return (
       <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
         <header>
-          <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter">Dashboard Ejecutivo</h1>
+          <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter">Dashboard Ejecutivo <span className="text-[10px] font-black text-yellow-400 bg-yellow-900/30 px-2 py-0.5 rounded-full align-middle ml-2">v2</span></h1>
         </header>
         <div className="h-64 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -112,7 +112,7 @@ export default function DashboardGeneral() {
     <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       <header>
         <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter">
-          Dashboard Ejecutivo
+          Dashboard Ejecutivo <span className="text-[10px] font-black text-yellow-400 bg-yellow-900/30 px-2 py-0.5 rounded-full align-middle ml-2">v2</span>
         </h1>
         <p className="text-sm font-bold text-slate-400 capitalize mt-1">
           {format(hoy, "EEEE dd 'de' MMMM, yyyy", { locale: es })}
