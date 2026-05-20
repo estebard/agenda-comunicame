@@ -1,4 +1,7 @@
-import { createServerSupabase } from '@/lib/supabaseServer';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { 
   CalendarClock, 
   TrendingUp, 
@@ -10,57 +13,82 @@ import {
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
+export default function DashboardGeneral() {
+  const [totalCitas, setTotalCitas] = useState(0);
+  const [asistencias, setAsistencias] = useState(0);
+  const [inasistencias, setInasistencias] = useState(0);
+  const [porAtender, setPorAtender] = useState(0);
+  const [cargaPorProfesional, setCargaPorProfesional] = useState<Record<string, number>>({});
+  const [pacientesCriticos, setPacientesCriticos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function DashboardGeneral() {
-  const supabase = await createServerSupabase();
+  useEffect(() => {
+    async function fetchData() {
+      const hoy = new Date();
+      const inicioHoy = startOfDay(hoy).toISOString();
+      const finHoy = endOfDay(hoy).toISOString();
 
-  // 1. Definir rango de "Hoy"
+      const [citasRes, asistenciasRes, criticosRes] = await Promise.all([
+        supabase
+          .from('cita')
+          .select(`
+            id, estado, fecha_hora_inicio, fecha_hora_fin, observacion,
+            es_recuperacion, grupo, paciente_id, profesional_id,
+            profesional:profesional_id(nombre, especialidad)
+          `)
+          .gte('fecha_hora_inicio', inicioHoy)
+          .lte('fecha_hora_inicio', finHoy),
+        supabase
+          .from('asistencia')
+          .select('id, estado, cita_oficial_id')
+          .gte('fecha_hora_ejecucion', inicioHoy)
+          .lte('fecha_hora_ejecucion', finHoy),
+        supabase
+          .from('vw_control_panel_agendamiento')
+          .select('*')
+          .lte('saldo_tokens', 2)
+          .order('saldo_tokens', { ascending: true })
+          .limit(5)
+      ]);
+
+      const citas = citasRes.data || [];
+      const asistenciasData = asistenciasRes.data || [];
+
+      setTotalCitas(citas.length);
+      setAsistencias(asistenciasData.filter(a => a.estado === 'ASISTE').length);
+      setInasistencias(asistenciasData.filter(a => a.estado === 'NO_ASISTE').length);
+      setPorAtender(citas.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length);
+
+      const carga = asistenciasData.reduce((acc: any, a: any) => {
+        const cita = citas.find(c => c.id === a.cita_oficial_id);
+        const prof = (cita as any)?.profesional?.nombre || 'Desconocido';
+        if (!acc[prof]) acc[prof] = 0;
+        acc[prof]++;
+        return acc;
+      }, {} as Record<string, number>);
+      setCargaPorProfesional(carga);
+
+      setPacientesCriticos(criticosRes.data || []);
+      setLoading(false);
+    }
+
+    fetchData();
+  }, []);
+
   const hoy = new Date();
-  const inicioHoy = startOfDay(hoy).toISOString();
-  const finHoy = endOfDay(hoy).toISOString();
 
-  // 2. Traer citas de hoy (agenda oficial)
-  const { data: citasHoy } = await supabase
-    .from('cita')
-    .select(`
-      id, estado, fecha_hora_inicio, fecha_hora_fin, observacion,
-      es_recuperacion, grupo, paciente_id, profesional_id,
-      profesional:profesional_id(nombre, especialidad)
-    `)
-    .gte('fecha_hora_inicio', inicioHoy)
-    .lte('fecha_hora_inicio', finHoy);
-
-  // 3. Traer asistencias de hoy (ejecución real)
-  const { data: asistenciasHoy } = await supabase
-    .from('asistencia')
-    .select('id, estado, cita_oficial_id')
-    .gte('fecha_hora_ejecucion', inicioHoy)
-    .lte('fecha_hora_ejecucion', finHoy);
-
-  // 4. Traer pacientes con tokens críticos (Saldo <= 2)
-  const { data: pacientesCriticos } = await supabase
-    .from('vw_control_panel_agendamiento')
-    .select('*')
-    .lte('saldo_tokens', 2)
-    .order('saldo_tokens', { ascending: true })
-    .limit(5);
-
-  // Cálculos Rápidos
-  const totalCitas = citasHoy?.length || 0;
-  const asistencias = asistenciasHoy?.filter(a => a.estado === 'ASISTE').length || 0;
-  const inasistencias = asistenciasHoy?.filter(a => a.estado === 'NO_ASISTE').length || 0;
-  const porAtender = citasHoy?.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length || 0;
-
-  // Agrupar asistencias reales por profesional (resuelve profesional desde citasHoy)
-  const cargaPorProfesional = asistenciasHoy?.reduce((acc: any, a: any) => {
-    const cita = citasHoy?.find(c => c.id === a.cita_oficial_id);
-    const prof = (cita as any)?.profesional?.nombre || 'Desconocido';
-    if (!acc[prof]) acc[prof] = 0;
-    acc[prof]++;
-    return acc;
-  }, {});
+  if (loading) {
+    return (
+      <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+        <header>
+          <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter">Dashboard Ejecutivo</h1>
+        </header>
+        <div className="h-64 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -73,7 +101,6 @@ export default async function DashboardGeneral() {
         </p>
       </header>
 
-      {/* METRICAS PRINCIPALES (Tarjetas) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-lg flex flex-col relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10"><CalendarClock size={64} /></div>
@@ -102,7 +129,6 @@ export default async function DashboardGeneral() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CARGA POR PROFESIONAL */}
         <section className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
           <div className="p-5 border-b border-slate-800 bg-slate-950">
             <h2 className="font-black text-slate-200 uppercase tracking-widest text-sm flex items-center">
@@ -110,7 +136,7 @@ export default async function DashboardGeneral() {
             </h2>
           </div>
           <div className="p-6 flex gap-4 overflow-x-auto">
-            {Object.keys(cargaPorProfesional || {}).length === 0 ? (
+            {Object.keys(cargaPorProfesional).length === 0 ? (
                <p className="text-slate-500 text-sm font-bold w-full text-center py-8">No hay citas registradas para hoy.</p>
             ) : (
               Object.entries(cargaPorProfesional).map(([profesional, cantidad]) => (
@@ -123,7 +149,6 @@ export default async function DashboardGeneral() {
           </div>
         </section>
 
-        {/* ALERTAS DE TOKENS (Saldos) */}
         <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
           <div className="p-5 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
             <h2 className="font-black text-slate-200 uppercase tracking-widest text-sm flex items-center">
@@ -131,10 +156,10 @@ export default async function DashboardGeneral() {
             </h2>
           </div>
           <div className="divide-y divide-slate-800">
-            {pacientesCriticos?.length === 0 ? (
+            {pacientesCriticos.length === 0 ? (
                <p className="text-slate-500 text-sm font-bold text-center py-10">Todos los pacientes tienen saldo suficiente.</p>
             ) : (
-              pacientesCriticos?.map((p: any) => (
+              pacientesCriticos.map((p: any) => (
                 <div key={p.paciente_id} className="p-4 flex justify-between items-center hover:bg-slate-800/50 transition-colors">
                   <div>
                     <div className="text-sm font-black text-slate-200">{p.nombre_completo}</div>
