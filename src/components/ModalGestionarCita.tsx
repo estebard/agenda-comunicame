@@ -31,7 +31,6 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
   const [observacion, setObservacion] = useState('');
   const [vincularOriginal, setVincularOriginal] = useState(false);
   const [originalId, setOriginalId] = useState('');
-  const [isOriginalReferenciada, setIsOriginalReferenciada] = useState<boolean | null>(null);
 
   // Adelantar
   const [showAdelantar, setShowAdelantar] = useState(false);
@@ -51,12 +50,6 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         setObservacion(citaExistente.observacion || '');
         setVincularOriginal(false);
         setOriginalId('');
-
-        // Verificar si esta cita es original referenciada por otras (bloqueada)
-        supabase.from('cita').select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle().then(({ data, error }) => {
-          if (error) { setIsOriginalReferenciada(true); return; }
-          setIsOriginalReferenciada(!!data);
-        });
       } else {
         setPacienteId('');
         setEstado('AGENDADA');
@@ -65,7 +58,6 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         setVincularOriginal(false);
         setOriginalId('');
         setShowAdelantar(false);
-        setIsOriginalReferenciada(false);
       }
       setCitasOriginales([]);
     }
@@ -89,6 +81,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
   if (!isOpen) return null;
 
   const esCrear = !citaExistente;
+  const bloqueada = !esCrear && citaExistente?.estado === 'REASIGNADA';
   const originalSeleccionada = citasOriginales.find(c => c.id === originalId);
 
   const getPreviewText = () => {
@@ -113,14 +106,10 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
       fin.setMinutes(fin.getMinutes() + 45);
 
       if (esCrear) {
-        // Capa servidor: si es edición y la cita está referenciada, bloquear
-        if (!esCrear && citaExistente?.id) {
-          const { data: refCheck } = await supabase.from('cita')
-            .select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle();
-          if (refCheck) {
-            alert('Esta cita está reasignada a otra sesión. No se puede modificar.');
-            setIsSaving(false); return;
-          }
+        // Guard: si es edición y está REASIGNADA, bloquear
+        if (bloqueada) {
+          alert('Esta cita está reasignada a otra sesión. No se puede modificar.');
+          setIsSaving(false); return;
         }
 
         // Validar duplicados: solo el mismo paciente en el mismo slot
@@ -220,10 +209,8 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
     if (!confirm('¿Eliminar esta cita definitivamente?')) return;
     setIsDeleting(true);
     try {
-      // Capa servidor: si la cita está referenciada, bloquear
-      const { data: refCheck } = await supabase.from('cita')
-        .select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle();
-      if (refCheck) {
+      // Guard: si está REASIGNADA, bloquear
+      if (citaExistente?.estado === 'REASIGNADA') {
         alert('Esta cita está reasignada a otra sesión. No se puede eliminar.');
         setIsDeleting(false); return;
       }
@@ -371,7 +358,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
             <div>
               <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Estado</label>
               <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
-                value={estado} onChange={(e) => setEstado(e.target.value)} disabled={isOriginalReferenciada !== false}>
+                value={estado} onChange={(e) => setEstado(e.target.value)} disabled={bloqueada}>
                 <option value="AGENDADA">Agendada</option>
                 <option value="CONFIRMADA">Confirmada</option>
                 <option value="ASISTE">Asiste</option>
@@ -381,16 +368,16 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
               </select>
             </div>
             <div className="flex items-end">
-              <label className={`flex items-center gap-2 p-3 bg-slate-950 border border-slate-700 rounded-lg w-full justify-center ${isOriginalReferenciada !== false ? 'opacity-50' : 'cursor-pointer hover:border-purple-500/50 transition-colors'}`}>
+              <label className={`flex items-center gap-2 p-3 bg-slate-950 border border-slate-700 rounded-lg w-full justify-center ${bloqueada ? 'opacity-50' : 'cursor-pointer hover:border-purple-500/50 transition-colors'}`}>
                 <input type="checkbox" checked={esRecuperacion} onChange={(e) => setEsRecuperacion(e.target.checked)}
-                  disabled={isOriginalReferenciada !== false}
+                  disabled={bloqueada}
                   className="w-4 h-4 accent-purple-500" />
                 <span className="text-[10px] font-black text-slate-400 uppercase">Recuperación</span>
               </label>
             </div>
           </div>
 
-          {isOriginalReferenciada === true && (
+          {bloqueada && (
             <div className="bg-amber-900/20 border border-amber-900/50 p-3 rounded-xl text-center">
               <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
                 Esta cita está reasignada a otra sesión. No se puede modificar.
@@ -426,11 +413,11 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
           <div>
             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Observación</label>
             <textarea className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 h-20 resize-none outline-none focus:border-blue-500 disabled:opacity-50"
-              value={observacion} onChange={(e) => setObservacion(e.target.value)} disabled={isOriginalReferenciada !== false} />
+              value={observacion} onChange={(e) => setObservacion(e.target.value)} disabled={bloqueada} />
           </div>
 
           {/* Adelantar (solo editar y no bloqueado) */}
-          {!esCrear && isOriginalReferenciada === false && (
+          {!esCrear && !bloqueada && (
             <>
               <button onClick={() => { setShowAdelantar(!showAdelantar); setAdelantarFecha(''); setAdelantarHora(''); }}
                 className="w-full border-2 border-dashed border-amber-800/50 rounded-xl p-3 text-[10px] font-black text-amber-400 uppercase tracking-widest hover:border-amber-500/50 hover:bg-amber-900/10 transition-colors flex items-center justify-center gap-2">
@@ -466,13 +453,13 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         </div>
 
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center gap-4">
-          {!esCrear && isOriginalReferenciada === false && (
-            <button onClick={handleDelete} disabled={isDeleting} className="text-[10px] font-black uppercase text-red-500 hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors flex items-center">
-              <Trash2 size={14} className="mr-1" /> Eliminar
-            </button>
-          )}
-          {(esCrear || isOriginalReferenciada !== false) && <div />}
-          {isOriginalReferenciada === false && (
+          {!esCrear && !bloqueada && (
+              <button onClick={handleDelete} disabled={isDeleting} className="text-[10px] font-black uppercase text-red-500 hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors flex items-center">
+                <Trash2 size={14} className="mr-1" /> Eliminar
+              </button>
+            )}
+            {(esCrear || bloqueada) && <div />}
+            {!bloqueada && (
             <button onClick={handleSave} disabled={isSaving}
               className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg flex items-center transition-colors">
               <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : (esCrear ? 'Agendar' : 'Guardar')}
