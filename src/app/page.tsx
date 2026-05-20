@@ -24,18 +24,11 @@ export default function DashboardGeneral() {
 
   useEffect(() => {
     async function fetchData() {
-      console.log('[DASHBOARD] Iniciando fetchData');
-      console.log('[DASHBOARD] supabase client:', supabase ? 'ok' : 'null');
-
-      const { data: session } = await supabase.auth.getSession();
-      console.log('[DASHBOARD] Sesion:', session?.session?.user?.email || 'SIN SESION');
-
       const hoy = new Date();
       const inicioHoy = startOfDay(hoy).toISOString();
       const finHoy = endOfDay(hoy).toISOString();
-      console.log('[DASHBOARD] Filtros:', { inicioHoy, finHoy });
 
-      const [citasRes, asistenciasRes, criticosRes] = await Promise.all([
+      const [citasRes, criticosRes] = await Promise.all([
         supabase
           .from('cita')
           .select(`
@@ -46,11 +39,6 @@ export default function DashboardGeneral() {
           .gte('fecha_hora_inicio', inicioHoy)
           .lte('fecha_hora_inicio', finHoy),
         supabase
-          .from('asistencia')
-          .select('id, estado, cita_oficial_id')
-          .gte('fecha_hora_ejecucion', inicioHoy)
-          .lte('fecha_hora_ejecucion', finHoy),
-        supabase
           .from('vw_control_panel_agendamiento')
           .select('*')
           .lte('saldo_tokens', 2)
@@ -58,36 +46,23 @@ export default function DashboardGeneral() {
           .limit(5)
       ]);
 
-      console.log('[DASHBOARD] RESULTADOS:');
-      console.log('[DASHBOARD] citas:', citasRes ? { count: citasRes.data?.length, error: citasRes.error, sample: citasRes.data?.[0] } : 'null');
-      console.log('[DASHBOARD] asistencias:', asistenciasRes ? { count: asistenciasRes.data?.length, error: asistenciasRes.error } : 'null');
-      console.log('[DASHBOARD] criticos:', criticosRes ? { count: criticosRes.data?.length, error: criticosRes.error, sample: criticosRes.data?.[0] } : 'null');
-
       const citas = citasRes.data || [];
-      const asistenciasData = asistenciasRes.data || [];
-
-      console.log('[DASHBOARD] Citas para hoy:', citas.length);
-      console.log('[DASHBOARD] Asistencias para hoy:', asistenciasData.length);
 
       setTotalCitas(citas.length);
-      setAsistencias(asistenciasData.filter(a => a.estado === 'ASISTE').length);
-      setInasistencias(asistenciasData.filter(a => a.estado === 'NO_ASISTE').length);
+      setAsistencias(citas.filter(c => c.estado === 'ASISTE').length);
+      setInasistencias(citas.filter(c => c.estado === 'NO_ASISTE' || c.estado === 'CANCELADA').length);
       setPorAtender(citas.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length);
 
-      const carga = asistenciasData.reduce((acc: any, a: any) => {
-        const cita = citas.find(c => c.id === a.cita_oficial_id);
-        const prof = (cita as any)?.profesional?.nombre || 'Desconocido';
+      const carga = citas.reduce((acc: any, c: any) => {
+        const prof = (c as any)?.profesional?.nombre || 'Desconocido';
         if (!acc[prof]) acc[prof] = 0;
         acc[prof]++;
         return acc;
       }, {} as Record<string, number>);
-      console.log('[DASHBOARD] Carga por profesional:', carga);
       setCargaPorProfesional(carga);
 
-      console.log('[DASHBOARD] Pacientes criticos:', criticosRes.data?.length || 0);
       setPacientesCriticos(criticosRes.data || []);
       setLoading(false);
-      console.log('[DASHBOARD] fetchData completado');
     }
 
     fetchData();
