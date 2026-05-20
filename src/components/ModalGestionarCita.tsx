@@ -470,6 +470,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
               <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : (esCrear ? 'Agendar' : 'Guardar')}
             </button>
           )}
+        </div>
       </div>
     </div>
   );
