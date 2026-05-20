@@ -56,7 +56,7 @@ export default async function DashboardGeneral() {
   // Agrupar asistencias reales por profesional (resuelve profesional desde citasHoy)
   const cargaPorProfesional = asistenciasHoy?.reduce((acc: any, a: any) => {
     const cita = citasHoy?.find(c => c.id === a.cita_oficial_id);
-    const prof = cita?.profesional?.nombre || 'Desconocido';
+    const prof = (cita as any)?.profesional?.nombre || 'Desconocido';
     if (!acc[prof]) acc[prof] = 0;
     acc[prof]++;
     return acc;
