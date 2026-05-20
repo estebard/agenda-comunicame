@@ -79,13 +79,14 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
     }
   }, [vincularOriginal, pacienteId]);
 
-  if (!isOpen) return null;
-
   const esCrear = !citaExistente;
   const bloqueada = !esCrear && citaExistente?.estado === 'REASIGNADA';
+
   useEffect(() => {
-    console.log('[MODAL] bloqueada:', bloqueada, '| estado:', citaExistente?.estado, '| esCrear:', esCrear);
-  }, [bloqueada, esCrear, citaExistente?.estado]);
+    if (isOpen) console.log('[MODAL] bloqueada:', bloqueada, '| estado:', citaExistente?.estado);
+  }, [isOpen, bloqueada, citaExistente?.estado]);
+
+  if (!isOpen) return null;
   const originalSeleccionada = citasOriginales.find(c => c.id === originalId);
 
   const getPreviewText = () => {
