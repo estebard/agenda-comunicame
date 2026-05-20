@@ -39,6 +39,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
 
   useEffect(() => {
     if (isOpen) {
+      console.log('[MODAL] abierto | esCrear:', !citaExistente, '| estado:', citaExistente?.estado, '| id:', citaExistente?.id?.slice(0,8) || 'null');
       supabase.from('paciente').select('id, nombre_completo').eq('activo', true).order('nombre_completo').then(({ data }) => {
         if (data) setPacientes(data);
       });
@@ -82,6 +83,9 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
 
   const esCrear = !citaExistente;
   const bloqueada = !esCrear && citaExistente?.estado === 'REASIGNADA';
+  useEffect(() => {
+    console.log('[MODAL] bloqueada:', bloqueada, '| estado:', citaExistente?.estado, '| esCrear:', esCrear);
+  }, [bloqueada, esCrear, citaExistente?.estado]);
   const originalSeleccionada = citasOriginales.find(c => c.id === originalId);
 
   const getPreviewText = () => {
