@@ -56,7 +56,8 @@ export default function HistorialPacientesPage() {
         const { data } = await supabase
         .from('cita')
         .select(`
-          *,
+          id, fecha_hora_inicio, fecha_hora_fin, estado, observacion,
+          es_recuperacion, grupo, paciente_id, profesional_id,
           profesional:profesional_id(nombre, especialidad)
         `)
         .eq('paciente_id', pacienteSeleccionado.paciente_id)
