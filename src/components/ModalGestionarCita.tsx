@@ -53,7 +53,8 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         setOriginalId('');
 
         // Verificar si esta cita es original referenciada por otras (bloqueada)
-        supabase.from('cita').select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle().then(({ data }) => {
+        supabase.from('cita').select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle().then(({ data, error }) => {
+          if (error) { setIsOriginalReferenciada(true); return; }
           setIsOriginalReferenciada(!!data);
         });
       } else {
