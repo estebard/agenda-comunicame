@@ -1,6 +1,5 @@
-import { supabase } from '@/lib/supabaseClient';
+import { createServerSupabase } from '@/lib/supabaseServer';
 import { 
-  Users, 
   CalendarClock, 
   TrendingUp, 
   AlertOctagon,
@@ -15,6 +14,8 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function DashboardGeneral() {
+  const supabase = await createServerSupabase();
+
   // 1. Definir rango de "Hoy"
   const hoy = new Date();
   const inicioHoy = startOfDay(hoy).toISOString();
@@ -23,14 +24,18 @@ export default async function DashboardGeneral() {
   // 2. Traer citas de hoy (agenda oficial)
   const { data: citasHoy } = await supabase
     .from('cita')
-    .select('*, profesional(nombre, especialidad)')
+    .select(`
+      id, estado, fecha_hora_inicio, fecha_hora_fin, observacion,
+      es_recuperacion, grupo, paciente_id, profesional_id,
+      profesional:profesional_id(nombre, especialidad)
+    `)
     .gte('fecha_hora_inicio', inicioHoy)
     .lte('fecha_hora_inicio', finHoy);
 
   // 3. Traer asistencias de hoy (ejecución real)
   const { data: asistenciasHoy } = await supabase
     .from('asistencia')
-    .select('id, estado, cita:cita_oficial_id(profesional:profesional_id(nombre, especialidad))')
+    .select('id, estado, cita_oficial_id')
     .gte('fecha_hora_ejecucion', inicioHoy)
     .lte('fecha_hora_ejecucion', finHoy);
 
@@ -48,9 +53,10 @@ export default async function DashboardGeneral() {
   const inasistencias = asistenciasHoy?.filter(a => a.estado === 'NO_ASISTE').length || 0;
   const porAtender = citasHoy?.filter(c => c.estado === 'AGENDADA' || c.estado === 'CONFIRMADA').length || 0;
 
-  // Agrupar asistencias reales por profesional
+  // Agrupar asistencias reales por profesional (resuelve profesional desde citasHoy)
   const cargaPorProfesional = asistenciasHoy?.reduce((acc: any, a: any) => {
-    const prof = a.cita?.profesional?.nombre || 'Desconocido';
+    const cita = citasHoy?.find(c => c.id === a.cita_oficial_id);
+    const prof = cita?.profesional?.nombre || 'Desconocido';
     if (!acc[prof]) acc[prof] = 0;
     acc[prof]++;
     return acc;
