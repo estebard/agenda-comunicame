@@ -261,6 +261,7 @@ function AgendaInner() {
         {cita.grupo && <span className="bg-orange-900/40 text-orange-400 text-[7px] font-black px-1 py-0.5 rounded border border-orange-500/30 uppercase">GRUPO</span>}
         {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
         {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
+        {cita.profesional?.nombre && <span className="bg-slate-700/40 text-slate-300 text-[7px] font-black px-1 py-0.5 rounded border border-slate-500/30 uppercase">{cita.profesional.nombre}</span>}
         <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
           {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
         </span>
@@ -376,26 +377,7 @@ function AgendaInner() {
                       </td>
                       {profsRender.map((p: any, i: number) => {
                         const items = getCitaEnBloque(new Date(fechaDiaria.getFullYear(), fechaDiaria.getMonth(), fechaDiaria.getDate()), hora, p.id);
-  const CitaCard = ({ cita, onClick }: { cita: any; onClick: () => void }) => (
-    <div onClick={onClick} className={`p-2 rounded-lg cursor-pointer transition-colors shadow-sm flex flex-col ${getEstilosEstado(cita.estado)}`}>
-      <div className="flex justify-between items-start mb-1">
-        <span className="text-[11px] font-black uppercase leading-tight truncate">{cita.paciente?.nombre_completo}</span>
-        <span className="text-[9px] font-bold opacity-80 whitespace-nowrap">{cita.paciente?.fecha_nacimiento ? (() => { const h = new Date(); const c = new Date(cita.paciente.fecha_nacimiento); let e = h.getFullYear() - c.getFullYear(); if (h.getMonth() < c.getMonth() || (h.getMonth() === c.getMonth() && h.getDate() < c.getDate())) e--; return e + 'a'; })() : ''}</span>
-      </div>
-      <div className="flex items-center gap-1 flex-wrap mb-1">
-        <span className="text-[9px] font-black uppercase opacity-70">{cita.estado}</span>
-        {cita.grupo && <span className="bg-orange-900/40 text-orange-400 text-[7px] font-black px-1 py-0.5 rounded border border-orange-500/30 uppercase">GRUPO</span>}
-        {cita.es_recuperacion && !cita.referencia_cita_id && <span className="bg-purple-900/40 text-purple-400 text-[7px] font-black px-1 py-0.5 rounded border border-purple-500/30 uppercase">Recuperación</span>}
-        {cita.referencia_cita_id && <span className="bg-amber-900/40 text-amber-400 text-[7px] font-black px-1 py-0.5 rounded border border-amber-500/30 uppercase">Vinculada</span>}
-        <span className={`text-[7px] font-black px-1 py-0.5 rounded border ${(cita.paciente?.tokens_disponibles ?? 0) > 0 ? 'bg-blue-900/40 text-blue-400 border-blue-500/30' : 'bg-red-900/40 text-red-400 border-red-500/30'}`}>
-          {(cita.paciente?.tokens_disponibles ?? 0) > 0 ? cita.paciente.tokens_disponibles + ' Tokens' : 'Deuda: ' + Math.abs(cita.paciente?.tokens_disponibles ?? 0)}
-        </span>
-      </div>
-      {cita.observacion && <div className="text-[8px] text-slate-400 italic leading-tight line-clamp-2 mt-0.5">{cita.observacion}</div>}
-    </div>
-  );
-
-  return (
+                        return (
                           <td key={`${p.id}-${hora}`} className={`border-b border-r border-slate-800 p-1.5 align-top min-h-[6rem] ${hora === '13:00' ? 'bg-slate-950' : getFondoColumna(i)}`}>
                             <div className="flex flex-col gap-1 h-full min-h-[5rem]">
                               {hora === '13:00' ? (

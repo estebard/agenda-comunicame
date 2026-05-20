@@ -56,9 +56,8 @@ export default function HistorialPacientesPage() {
         const { data } = await supabase
         .from('cita')
         .select(`
-          *, 
-          profesional:profesional_id(nombre, especialidad),
-          asistencia:asistencia(id, fecha_hora_ejecucion, estado, observacion, profesional:profesional_id(nombre))
+          *,
+          profesional:profesional_id(nombre, especialidad)
         `)
         .eq('paciente_id', pacienteSeleccionado.paciente_id)
         .order('fecha_hora_inicio', { ascending: false });
@@ -504,29 +503,7 @@ export default function HistorialPacientesPage() {
                                 "{cita.observacion}"
                               </div>
                             )}
-                            {cita.asistencia && cita.asistencia.length > 0 && (
-                              <div className="mt-3 p-3 bg-slate-900 border border-slate-700 rounded-lg space-y-2">
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-1">
-                                  Detalle de Ejecución Operativa
-                                </div>
-                                {cita.asistencia.map((asis: any) => (
-                                  <div key={asis.id} className="flex justify-between items-center text-xs">
-                                    <div>
-                                      <span className="font-bold text-slate-300">
-                                        {format(new Date(asis.fecha_hora_ejecucion), "HH:mm")} hrs
-                                      </span>
-                                      <span className="text-slate-500 mx-2">|</span>
-                                      <span className="text-blue-400 font-bold uppercase">{asis.profesional?.nombre}</span>
-                                    </div>
-                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${
-                                      asis.estado === 'ASISTE' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                                    }`}>
-                                      {asis.estado}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+
                           </div>
                         </div>
                       ))}
