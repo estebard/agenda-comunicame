@@ -31,6 +31,7 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
   const [observacion, setObservacion] = useState('');
   const [vincularOriginal, setVincularOriginal] = useState(false);
   const [originalId, setOriginalId] = useState('');
+  const [isOriginalReferenciada, setIsOriginalReferenciada] = useState(false);
 
   // Adelantar
   const [showAdelantar, setShowAdelantar] = useState(false);
@@ -50,6 +51,11 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         setObservacion(citaExistente.observacion || '');
         setVincularOriginal(false);
         setOriginalId('');
+
+        // Verificar si esta cita es original referenciada por otras (bloqueada)
+        supabase.from('cita').select('id').eq('referencia_cita_id', citaExistente.id).maybeSingle().then(({ data }) => {
+          setIsOriginalReferenciada(!!data);
+        });
       } else {
         setPacienteId('');
         setEstado('AGENDADA');
@@ -344,8 +350,8 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Estado</label>
-              <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 outline-none focus:border-blue-500"
-                value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+                value={estado} onChange={(e) => setEstado(e.target.value)} disabled={isOriginalReferenciada}>
                 <option value="AGENDADA">Agendada</option>
                 <option value="CONFIRMADA">Confirmada</option>
                 <option value="ASISTE">Asiste</option>
@@ -355,13 +361,25 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
               </select>
             </div>
             <div className="flex items-end">
-              <label className="flex items-center gap-2 p-3 bg-slate-950 border border-slate-700 rounded-lg cursor-pointer hover:border-purple-500/50 transition-colors w-full justify-center">
+              <label className={`flex items-center gap-2 p-3 bg-slate-950 border border-slate-700 rounded-lg w-full justify-center ${isOriginalReferenciada ? 'opacity-50' : 'cursor-pointer hover:border-purple-500/50 transition-colors'}`}>
                 <input type="checkbox" checked={esRecuperacion} onChange={(e) => setEsRecuperacion(e.target.checked)}
+                  disabled={isOriginalReferenciada}
                   className="w-4 h-4 accent-purple-500" />
                 <span className="text-[10px] font-black text-slate-400 uppercase">Recuperación</span>
               </label>
             </div>
           </div>
+
+          {isOriginalReferenciada && (
+            <div className="bg-amber-900/20 border border-amber-900/50 p-3 rounded-xl text-center">
+              <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                Esta cita está reasignada a otra sesión. No se puede modificar.
+              </span>
+              <div className="text-[9px] text-slate-400 mt-1">
+                Eliminá la cita vinculada para desbloquearla.
+              </div>
+            </div>
+          )}
 
           {/* Badges informativos (solo editar) */}
           {!esCrear && (
@@ -387,12 +405,12 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
           {/* Observación */}
           <div>
             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Observación</label>
-            <textarea className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 h-20 resize-none outline-none focus:border-blue-500"
-              value={observacion} onChange={(e) => setObservacion(e.target.value)} />
+            <textarea className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 h-20 resize-none outline-none focus:border-blue-500 disabled:opacity-50"
+              value={observacion} onChange={(e) => setObservacion(e.target.value)} disabled={isOriginalReferenciada} />
           </div>
 
-          {/* Adelantar (solo editar) */}
-          {!esCrear && (
+          {/* Adelantar (solo editar y no bloqueado) */}
+          {!esCrear && !isOriginalReferenciada && (
             <>
               <button onClick={() => { setShowAdelantar(!showAdelantar); setAdelantarFecha(''); setAdelantarHora(''); }}
                 className="w-full border-2 border-dashed border-amber-800/50 rounded-xl p-3 text-[10px] font-black text-amber-400 uppercase tracking-widest hover:border-amber-500/50 hover:bg-amber-900/10 transition-colors flex items-center justify-center gap-2">
@@ -428,17 +446,18 @@ export default function ModalGestionarCita({ isOpen, onClose, dia, hora, profesi
         </div>
 
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center gap-4">
-          {!esCrear && (
+          {!esCrear && !isOriginalReferenciada && (
             <button onClick={handleDelete} disabled={isDeleting} className="text-[10px] font-black uppercase text-red-500 hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors flex items-center">
               <Trash2 size={14} className="mr-1" /> Eliminar
             </button>
           )}
-          {esCrear && <div />}
-          <button onClick={handleSave} disabled={isSaving}
-            className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg flex items-center transition-colors">
-            <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : (esCrear ? 'Agendar' : 'Guardar')}
-          </button>
-        </div>
+          {(esCrear || isOriginalReferenciada) && <div />}
+          {!isOriginalReferenciada && (
+            <button onClick={handleSave} disabled={isSaving}
+              className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white text-xs font-black uppercase px-6 py-3 rounded-lg shadow-lg flex items-center transition-colors">
+              <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : (esCrear ? 'Agendar' : 'Guardar')}
+            </button>
+          )}
       </div>
     </div>
   );
